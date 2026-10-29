@@ -133,7 +133,7 @@ async def request_gateway(request: Request, call_next):
         )
 
     response = await call_next(request)
-    if path not in {"/", "/api/events", "/api/metrics", "/health", "/api/health"}:
+    if path not in {"/", "/api/events", "/api/metrics", "/api/security/findings", "/health", "/api/health"}:
         record_event({
             "timestamp": utc_now(),
             "request_id": request_id,
