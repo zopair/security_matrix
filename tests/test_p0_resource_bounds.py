@@ -47,20 +47,20 @@ def test_deception_rate_limit_is_bounded(monkeypatch, tmp_path):
 
 def test_response_body_cap_is_enforced(monkeypatch):
     monkeypatch.setattr(deception, "ENABLED", True)
-    monkeypatch.setattr(deception, "MAX_RESPONSE_BYTES", 256)
+    monkeypatch.setattr(deception, "MAX_RESPONSE_BYTES", 128)
     client = TestClient(main.app)
     response = client.get("/api/v1/internal/service-registry")
     assert response.status_code == 500
-    assert len(response.content) < 256
+    assert len(response.content) < 128
 
 
-def test_assessment_body_limit_works_without_content_length(monkeypatch, tmp_path):
+def test_assessment_body_limit_works_without_trusting_content_length(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "LOG_PATH", tmp_path / "events.jsonl")
     monkeypatch.setattr(main, "MAX_ASSESS_BODY_BYTES", 16)
     client = TestClient(main.app)
     response = client.post(
         "/api/security/assess",
         content=b'{"consent":true,"target":"this body is longer than sixteen bytes"}',
-        headers={"content-type": "application/json", "content-length": ""},
+        headers={"content-type": "application/json"},
     )
     assert response.status_code == 413
