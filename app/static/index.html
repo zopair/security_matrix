@@ -15,6 +15,7 @@
     .chart{height:180px;display:flex;align-items:end;gap:10px;border-bottom:1px solid var(--line);padding:14px 4px 0;background:repeating-linear-gradient(to bottom,transparent 0,transparent 43px,#233148 44px)}.bar{flex:1;min-width:5px;border-radius:5px 5px 0 0;background:linear-gradient(0deg,#235f80,#4de2d0);opacity:.88}.chart-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;padding-top:8px}
     .events{display:flex;flex-direction:column;gap:0}.event{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;padding:13px 0;border-bottom:1px solid #1d2a3f;align-items:start}.event:last-child{border-bottom:0}.event-dot{width:7px;height:7px;margin-top:6px;border-radius:50%;background:var(--amber)}.event strong{font-size:12px;display:block;overflow-wrap:anywhere}.event small{color:var(--muted)}.pill{font-size:10px;color:var(--amber);background:#302414;border-radius:5px;padding:3px 6px}.empty{color:var(--muted);padding:22px 0;text-align:center}
     .bottom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}.status-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #1d2a3f}.status-row:last-child{border-bottom:0}.ok{color:var(--cyan)}footer{color:#687c99;text-align:center;font-size:11px;padding:24px 0 4px}
+    .repo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.repo-metric{padding:13px;border:1px solid var(--line);border-radius:10px;background:#0b1422;min-width:0}.repo-metric strong{display:block;font-size:20px;margin-top:5px;overflow-wrap:anywhere}.repo-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.repo-link{color:var(--cyan);text-decoration:none}.repo-link:hover{text-decoration:underline}.repo-state{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 7px;font-size:10px;text-transform:uppercase;white-space:nowrap}.state-success{color:var(--cyan);border-color:#24564f}.state-failure{color:var(--red);border-color:#6b2c3b}.state-pending{color:var(--amber);border-color:#6a512b}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.refresh-button{background:#17263c;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:8px 11px;cursor:pointer}.backend-help{display:block;color:var(--muted);font-size:11px;margin-top:5px}@media(max-width:900px){.repo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.repo-columns{grid-template-columns:1fr}}@media(max-width:520px){.repo-grid{grid-template-columns:1fr 1fr}.repo-metric strong{font-size:17px}}
     @media(max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.main{grid-template-columns:1fr}.bottom{grid-template-columns:1fr 1fr}}@media(max-width:520px){.shell{padding:16px}.grid,.bottom{grid-template-columns:1fr 1fr}.metric{font-size:24px}.title{font-size:20px}.card{padding:14px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
   </style>
 </head>
@@ -37,9 +38,27 @@
     </section>
     <section class="card" style="margin-top:14px"><div class="section-head"><h2>Scanner findings</h2><span class="tag">Semgrep · pip-audit · Bandit · Nuclei</span></div><div class="events" id="findings-list"><div class="empty">Waiting for authenticated scanner reports…</div></div></section>
 
+    <section class="card" style="margin-top:14px" id="github-live">
+      <div class="section-head"><div><h2>GitHub repository · live status</h2><p class="sub">Read-only data fetched directly from the public GitHub API.</p></div><div class="toolbar"><span id="github-state" class="repo-state state-pending">Connecting</span><button id="github-refresh" class="refresh-button" type="button">Refresh now</button></div></div>
+      <div class="repo-grid" aria-label="Repository status metrics">
+        <div class="repo-metric"><span class="metric-label">Open pull requests</span><strong id="repo-pr-count">—</strong><span class="meta">Fixes and dependency updates</span></div>
+        <div class="repo-metric"><span class="metric-label">CI</span><strong id="repo-ci-state">—</strong><span class="meta" id="repo-ci-time">Latest workflow</span></div>
+        <div class="repo-metric"><span class="metric-label">Security Scan</span><strong id="repo-security-state">—</strong><span class="meta" id="repo-security-time">Latest workflow</span></div>
+        <div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time">Latest workflow</span></div>
+      </div>
+      <div class="repo-columns">
+        <div><div class="section-head"><h2>Open pull requests</h2><a class="repo-link" href="https://github.com/zopair/security_matrix/pulls" target="_blank" rel="noopener noreferrer">View all ↗</a></div><div class="events" id="github-prs"><div class="empty">Loading open pull requests…</div></div></div>
+        <div><div class="section-head"><h2>Latest workflow runs</h2><a class="repo-link" href="https://github.com/zopair/security_matrix/actions" target="_blank" rel="noopener noreferrer">View Actions ↗</a></div><div class="events" id="github-workflows"><div class="empty">Loading workflow status…</div></div></div>
+      </div>
+      <p class="meta" id="github-updated" style="margin-top:12px">No GitHub data loaded yet.</p>
+    </section>
+
     <section class="card" style="margin-top:14px" id="ai-assessment">
       <div class="section-head"><h2>Consent-based security scan & remediation</h2><span class="tag">SAFE LOCAL SCAN</span></div>
       <p class="sub" style="margin-bottom:12px">Scan a repository-relative path in this checkout, such as <code>app</code> or <code>app/main.py</code>. An entered URL is recorded for passive review only; this MVP never contacts external URLs or runs active probes.</p>
+      <label for="backend-url" style="display:block;margin:10px 0 6px">FastAPI backend URL (for scanning and telemetry)</label>
+      <input id="backend-url" type="url" maxlength="300" placeholder="https://your-api.example.com or http://127.0.0.1:8000" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
+      <small class="backend-help">GitHub Pages only hosts this UI. Connect your deployed FastAPI URL here to enable scanning, telemetry and AI remediation. Do not put API keys in this field.</small>
       <form id="assessment-form">
         <label for="assessment-target" style="display:block;margin:10px 0 6px">Website URL or repository path</label>
         <input id="assessment-target" name="target" required maxlength="2048" placeholder="app/ or https://example.com" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
@@ -59,9 +78,99 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const GITHUB_API = "https://api.github.com/repos/zopair/security_matrix";
+    const isGitHubPages = location.hostname.endsWith(".github.io");
+    const backendInput = $("backend-url");
+    try { backendInput.value = localStorage.getItem("securitymatrix-api-base") || ""; } catch (_) {}
+    function apiBase() {
+      const typed = backendInput.value.trim();
+      if (typed) {
+        let parsed;
+        try { parsed = new URL(typed); } catch (_) { throw new Error("Enter a valid backend URL."); }
+        if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname))) {
+          throw new Error("Use HTTPS for a remote backend (HTTP is allowed only on localhost).");
+        }
+        return parsed.origin;
+      }
+      return isGitHubPages ? "" : location.origin;
+    }
+    backendInput.addEventListener("change", () => {
+      try {
+        const base = apiBase();
+        localStorage.setItem("securitymatrix-api-base", base);
+        $("assessment-status").textContent = base ? "Backend URL saved for this browser." : "No backend configured. GitHub status remains available.";
+      } catch (error) { $("assessment-status").textContent = error.message; }
+    });
+    function statusClass(status, conclusion) {
+      const value = (conclusion || status || "unknown").toLowerCase();
+      if (["success", "completed", "neutral", "skipped"].includes(value)) return "state-success";
+      if (["failure", "timed_out", "cancelled", "action_required"].includes(value)) return "state-failure";
+      return "state-pending";
+    }
+    function statusText(run) {
+      if (!run) return "No runs";
+      if (run.status === "completed") return (run.conclusion || "completed").replace(/_/g, " ");
+      return (run.status || "unknown").replace(/_/g, " ");
+    }
+    function ago(value) {
+      if (!value) return "Time unavailable";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "Time unavailable";
+      return date.toLocaleString();
+    }
+    async function githubJson(path) {
+      const response = await fetch(GITHUB_API + path, {headers: {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}});
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 429) throw new Error("GitHub API rate limit reached. Wait before refreshing.");
+        throw new Error("GitHub API returned HTTP " + response.status);
+      }
+      return response.json();
+    }
+    async function refreshGithubStatus() {
+      const state = $("github-state");
+      state.textContent = "Refreshing";
+      state.className = "repo-state state-pending";
+      const results = await Promise.allSettled([
+        githubJson("/pulls?state=open&per_page=20&sort=updated&direction=desc"),
+        githubJson("/actions/runs?per_page=30")
+      ]);
+      let partial = false;
+      if (results[0].status === "fulfilled") {
+        const pulls = results[0].value;
+        $("repo-pr-count").textContent = pulls.length;
+        $("github-prs").innerHTML = pulls.length ? pulls.map(pr => {
+          const labels = (pr.labels || []).slice(0, 3).map(label => label.name).join(" · ");
+          return '<div class="event"><span class="event-dot" style="background:var(--cyan)"></span><div><strong><a class="repo-link" href="' + esc(pr.html_url) + '" target="_blank" rel="noopener noreferrer">#' + esc(pr.number) + ' ' + esc(pr.title) + '</a></strong><small>' + esc(pr.head?.ref || "branch unavailable") + (labels ? ' · ' + esc(labels) : '') + '</small><small>Updated ' + esc(ago(pr.updated_at)) + (pr.draft ? ' · Draft' : '') + '</small></div><span class="pill">OPEN</span></div>';
+        }).join("") : '<div class="empty">No open pull requests.</div>';
+      } else {
+        partial = true;
+        $("github-prs").innerHTML = '<div class="empty">' + esc(results[0].reason?.message || "Unable to load pull requests.") + '</div>';
+      }
+      if (results[1].status === "fulfilled") {
+        const runs = results[1].value.workflow_runs || [];
+        const latest = name => runs.find(run => run.name.toLowerCase() === name.toLowerCase());
+        const ci = latest("CI"), security = latest("Security Scan"), nuclei = latest("Nuclei DAST");
+        for (const [key, run] of [["ci", ci], ["security", security], ["nuclei", nuclei]]) {
+          $("repo-" + key + "-state").textContent = statusText(run);
+          $("repo-" + key + "-state").className = "repo-state " + statusClass(run?.status, run?.conclusion);
+          $("repo-" + key + "-time").textContent = run ? ago(run.updated_at || run.created_at) : "No workflow run found";
+        }
+        $("github-workflows").innerHTML = runs.length ? runs.slice(0, 8).map(run =>
+          '<div class="event"><span class="event-dot" style="background:' + (run.conclusion === "success" ? "var(--cyan)" : run.conclusion === "failure" ? "var(--red)" : "var(--amber)") + '"></span><div><strong><a class="repo-link" href="' + esc(run.html_url) + '" target="_blank" rel="noopener noreferrer">' + esc(run.name) + '</a></strong><small>' + esc(run.head_branch || "branch unavailable") + ' · ' + esc(ago(run.updated_at || run.created_at)) + '</small></div><span class="repo-state ' + statusClass(run.status, run.conclusion) + '">' + esc(statusText(run)) + '</span></div>'
+        ).join("") : '<div class="empty">No workflow runs returned by GitHub.</div>';
+      } else {
+        partial = true;
+        $("github-workflows").innerHTML = '<div class="empty">' + esc(results[1].reason?.message || "Unable to load workflow runs.") + '</div>';
+      }
+      state.textContent = partial ? "Partial data" : "Live from GitHub";
+      state.className = "repo-state " + (partial ? "state-pending" : "state-success");
+      $("github-updated").textContent = "Last checked " + new Date().toLocaleString() + " · Public, read-only GitHub API · Auto-refresh every 5 minutes.";
+    }
+    $("github-refresh").addEventListener("click", refreshGithubStatus);
+
     async function refresh() {
       try {
-        const [metricsRes, eventsRes, findingsRes] = await Promise.all([fetch("/api/metrics"), fetch("/api/events?limit=12"), fetch("/api/security/findings?limit=100")]);
+        const base = apiBase(); if (!base) throw new Error("GitHub Pages is static. Enter your FastAPI backend URL above to enable telemetry and scanning."); const [metricsRes, eventsRes, findingsRes] = await Promise.all([fetch(base + "/api/metrics"), fetch(base + "/api/events?limit=12"), fetch(base + "/api/security/findings?limit=100")]);
         if (!metricsRes.ok || !eventsRes.ok || !findingsRes.ok) throw new Error("API unavailable");
         const metrics = await metricsRes.json(), data = await eventsRes.json(), findingsData = await findingsRes.json(), events = data.events || [];
         $("system-state").textContent = "LOCAL API CONNECTED";
@@ -91,6 +200,9 @@
       const status = document.getElementById("assessment-status");
       const results = document.getElementById("assessment-results");
       const target = document.getElementById("assessment-target").value.trim();
+      let base;
+      try { base = apiBase(); } catch (error) { status.textContent = error.message; return; }
+      if (!base) { status.textContent = "Enter a FastAPI backend URL first. GitHub Pages cannot run Python scans itself."; return; }
       const consent = document.getElementById("assessment-consent").checked;
       if (!consent) { status.textContent = "Please confirm authorization and the disclaimer first."; return; }
       status.textContent = "Running bounded local analysis…";
@@ -98,7 +210,7 @@
       const button = document.getElementById("assessment-submit");
       button.disabled = true;
       try {
-        const response = await fetch("/api/security/assess", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target,consent:true})});
+        const response = await fetch(base + "/api/security/assess", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target,consent:true})});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Assessment failed");
         status.textContent = "Scan complete · " + data.mode + " · " + (data.findings || []).length + " finding(s)";
@@ -114,11 +226,14 @@
       finally { button.disabled = false; }
     });
     async function runProposal(scanId, index, approve) {
+      let base;
+      try { base = apiBase(); } catch (error) { alert(error.message); return; }
+      if (!base) { alert("Enter a FastAPI backend URL first."); return; }
       const output = document.getElementById("proposal-" + index);
       output.textContent = "Preparing recommendation…";
       try {
         const action = approve ? "approve" : "analyze";
-        const response = await fetch("/api/security/assess/" + encodeURIComponent(scanId) + "/findings/" + index + "/" + action, {
+        const response = await fetch(base + "/api/security/assess/" + encodeURIComponent(scanId) + "/findings/" + index + "/" + action, {
           method:"POST",headers:{"Content-Type":"application/json"},
           body: JSON.stringify(approve ? {approved:true} : {})
         });
@@ -134,6 +249,7 @@
       } catch (error) { output.textContent = error.message || "Request failed"; }
     }
 \n    refresh(); setInterval(refresh, 5000);
+    refreshGithubStatus(); setInterval(refreshGithubStatus, 300000);
   </script>
 </body>
 </html>
