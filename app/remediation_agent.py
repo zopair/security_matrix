@@ -17,8 +17,8 @@ def request_json(url: str, method: str = "GET", token: str | None = None, body: 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            raw = response.read(24001)
-            if len(raw) > 24000: raise AgentError("Provider response exceeded size limit.")
+            raw = response.read(max_bytes + 1)
+            if len(raw) > max_bytes: raise AgentError("Provider response exceeded size limit.")
             return json.loads(raw.decode())
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 429): raise AgentError("Provider rate or permission limit reached; retry later.") from exc
