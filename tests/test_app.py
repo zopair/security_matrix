@@ -108,43 +108,45 @@ def test_local_assessment_returns_bounded_results():
     assert len(data["findings"]) <= 100
 
 
-def test_approval_requires_explicit_approval():
-    scan = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True}).json()
-    response = client.post(
-        f"/api/security/assess/{scan['scan_id']}/findings/0/approve",
-        json={"approved": False},
-    )
-    assert response.status_code == 400
-
-
-def test_approval_fails_closed_when_ai_is_not_configured(monkeypatch):
-    import app.main as main_module
-    monkeypatch.setenv("OPENAI_API_KEY", "")
-    monkeypatch.setenv("SECURITYMATRIX_GITHUB_TOKEN", "")
-    monkeypatch.setenv("GH_TOKEN", "")
-    scan = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True}).json()
-    response = client.post(
-        f"/api/security/assess/{scan['scan_id']}/findings/0/approve",
-        json={"approved": True},
-    )
-    assert response.status_code == 422
-    assert "OPENAI_API_KEY" in response.json()["error"]
-
-
-def test_ai_remediation_fails_closed_without_api_key(monkeypatch):
-    import app.remediation_agent as agent
+def test_local_remediation_guidance_requires_no_external_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    try:
-        agent.generate_patch({"target": "app/main.py", "line": 1})
-        assert False, "Expected missing API key to disable AI remediation"
-    except agent.AgentError as exc:
-        assert "OPENAI_API_KEY" in str(exc)
+    monkeypatch.delenv("SECURITYMATRIX_GITHUB_TOKEN", raising=False)
+    scan = client.post(
+        "/api/security/assess",
+        json={"target": "https://example.com", "consent": True},
+    ).json()
+    response = client.post(
+        f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
+        json={},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "deterministic-open-source"
+    assert "external AI API" in data["message"]
+    assert data["workflow_url"].endswith("/actions/workflows/auto-remediation.yml")
 
 
-def test_ai_remediation_rejects_path_traversal():
-    import app.remediation_agent as agent
-    try:
-        agent.get_source({"target": "../outside.py", "line": 1})
-        assert False, "Expected unsafe path to be rejected"
-    except agent.AgentError:
-        pass
+def test_remediation_guidance_does_not_edit_source_or_call_external_services():
+    scan = client.post(
+        "/api/security/assess",
+        json={"target": "https://example.com", "consent": True},
+    ).json()
+    response = client.post(
+        f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
+        json={},
+    )
+    assert response.status_code == 200
+    assert response.json()["patch"] is None
+    assert response.json()["mode"] == "deterministic-open-source"
+
+
+def test_invalid_finding_index_returns_404():
+    scan = client.post(
+        "/api/security/assess",
+        json={"target": "https://example.com", "consent": True},
+    ).json()
+    response = client.post(
+        f"/api/security/assess/{scan['scan_id']}/findings/99/analyze",
+        json={},
+    )
+    assert response.status_code == 404
