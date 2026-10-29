@@ -42,7 +42,7 @@ jobs:
 
       - name: Semgrep scan
         continue-on-error: true
-        run: semgrep scan --config auto --sarif --output semgrep.sarif .
+        run: semgrep scan --config .semgrep/security.yml --metrics off --sarif --output semgrep.sarif .
 
       - name: Dependency audit
         continue-on-error: true
