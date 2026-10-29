@@ -5,8 +5,9 @@ from app import deception
 from app import main
 
 
-def test_deception_is_disabled_by_default(monkeypatch):
+def test_deception_is_disabled_by_default(monkeypatch, tmp_path):
     monkeypatch.setattr(deception, "ENABLED", False)
+    monkeypatch.setattr(main, "LOG_PATH", tmp_path / "events.jsonl")
     client = TestClient(main.app)
     response = client.get("/api/v1/admin/master-key-dump")
     assert response.status_code == 404
@@ -45,9 +46,10 @@ def test_deception_rate_limit_is_bounded(monkeypatch, tmp_path):
     assert limited.headers["retry-after"] == "60"
 
 
-def test_response_body_cap_is_enforced(monkeypatch):
+def test_response_body_cap_is_enforced(monkeypatch, tmp_path):
     monkeypatch.setattr(deception, "ENABLED", True)
     monkeypatch.setattr(deception, "MAX_RESPONSE_BYTES", 128)
+    monkeypatch.setattr(main, "LOG_PATH", tmp_path / "events.jsonl")
     client = TestClient(main.app)
     response = client.get("/api/v1/internal/service-registry")
     assert response.status_code == 500
