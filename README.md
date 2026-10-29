@@ -112,7 +112,8 @@ The repository's workflow definitions under `.github/workflows/` can run tests o
 
 GitHub Actions includes the following workflows:
 
-- `.github/workflows/security-scan.yml`: Semgrep static analysis, pip-audit dependency checks, Bandit Python checks, SARIF upload, and a normalized report artifact. Runs on pushes, pull requests, weekly schedule, and manual dispatch.
+- `.github/workflows/security-scan.yml`: local Semgrep rules (no hosted rule registry), pip-audit dependency checks, Bandit Python checks, SARIF upload, and a normalized report artifact.
+- `.github/workflows/codeql.yml`: GitHub CodeQL security-extended analysis for Python. Runs on pushes, pull requests, weekly schedule, and manual dispatch.
 - `.github/workflows/nuclei-dast.yml`: Nuclei scans only the temporary app started on `127.0.0.1` inside the GitHub-hosted runner. It uses bounded request rate/concurrency and disables Interactsh callbacks.
 - `.github/workflows/auto-remediation.yml`: reviews pip-audit output and proposes compatible direct-dependency constraint updates in a pull request. It never merges or deploys automatically.
 - `.github/dependabot.yml`: weekly dependency and GitHub Actions update proposals.
@@ -173,12 +174,12 @@ SecurityMatrix does not call hosted LLMs or require external AI API keys. Remedi
 
 ### Open-source and GitHub-native components
 
-- **Semgrep Community Edition**: static application security analysis and SARIF output.
-- **Bandit**: Python-specific security linting.
-- **pip-audit**: known-vulnerability checks for Python dependencies.
-- **Nuclei**: DAST checks against the isolated loopback test instance only.
-- **Dependabot**: native dependency update and security PRs.
-- **GitHub Actions + the repository's built-in `GITHUB_TOKEN`**: CI, scheduled scans, artifacts, and review-only dependency-remediation PRs. No personal access token or third-party API key is required for these workflows.
+- **[Semgrep Community Edition](https://github.com/semgrep/semgrep)**: static application security analysis and SARIF output, using rules versioned in this repository (`.semgrep/security.yml`).
+- **[Bandit](https://github.com/PyCQA/bandit)**: Python-specific security linting.
+- **[pip-audit](https://github.com/pypa/pip-audit)**: known-vulnerability checks for Python dependencies.
+- **[Nuclei](https://github.com/projectdiscovery/nuclei)**: DAST checks against the isolated loopback test instance only.
+- **[Dependabot](https://github.com/dependabot/dependabot-core)**: native dependency update and security PRs.
+- **[GitHub CodeQL](https://github.com/github/codeql) + GitHub Actions**: native static analysis, CI, scheduled scans, artifacts, and review-only dependency-remediation PRs. The PR workflow uses GitHub's built-in `GITHUB_TOKEN`; no personal access token or third-party API key is required.
 
 The `auto-remediation.yml` workflow proposes conservative dependency constraint changes when a compatible fixed version is identified, runs tests, and opens a review-only pull request. It does not merge or deploy. Source-code findings receive deterministic remediation guidance; a developer must implement and review the change. This avoids unsafe generic source rewriting.
 
