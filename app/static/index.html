@@ -36,7 +36,20 @@
       <article class="card"><div class="section-head"><h2>Recent telemetry</h2><span class="tag">JSONL</span></div><div class="events" id="events-list"><div class="empty">Loading telemetry…</div></div></article>
     </section>
     <section class="card" style="margin-top:14px"><div class="section-head"><h2>Scanner findings</h2><span class="tag">Semgrep · pip-audit · Bandit · Nuclei</span></div><div class="events" id="findings-list"><div class="empty">Waiting for authenticated scanner reports…</div></div></section>
-    <section class="bottom">
+
+    <section class="card" style="margin-top:14px" id="ai-assessment">
+      <div class="section-head"><h2>Consent-based security scan & remediation</h2><span class="tag">SAFE LOCAL SCAN</span></div>
+      <p class="sub" style="margin-bottom:12px">Scan a repository-relative path in this checkout, such as <code>app</code> or <code>app/main.py</code>. An entered URL is recorded for passive review only; this MVP never contacts external URLs or runs active probes.</p>
+      <form id="assessment-form">
+        <label for="assessment-target" style="display:block;margin:10px 0 6px">Website URL or repository path</label>
+        <input id="assessment-target" name="target" required maxlength="2048" placeholder="app/ or https://example.com" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
+        <label style="display:flex;gap:10px;align-items:flex-start;margin:14px 0;color:var(--muted)"><input id="assessment-consent" type="checkbox" required style="margin-top:4px"><span>I confirm I own this code/target or have explicit written authorization. I understand the scan is limited, may miss issues, and is not a guarantee of security. No external URL will be actively scanned by this MVP.</span></label>
+        <button id="assessment-submit" type="submit" style="padding:11px 16px;border:0;border-radius:8px;background:var(--cyan);color:#06201e;font-weight:800;cursor:pointer">Start Scan & AI Analysis</button>
+      </form>
+      <p id="assessment-status" class="meta" role="status" style="margin-top:12px">Consent is required before scanning.</p>
+      <div id="assessment-results" class="events"></div>
+    </section>
+\n    <section class="bottom">
       <article class="card"><div class="section-head"><h2>Gateway</h2><span class="tag">API</span></div><div class="status-row"><span>Request routing</span><strong class="ok">ONLINE</strong></div><div class="status-row"><span>Risk rules</span><strong class="ok">ACTIVE</strong></div><div class="status-row"><span>Rate controls</span><strong class="amber">EDGE REQUIRED</strong></div></article>
       <article class="card"><div class="section-head"><h2>Deception sandbox</h2><span class="tag">ISOLATED DESIGN</span></div><div class="status-row"><span>Data source</span><strong class="ok">SYNTHETIC</strong></div><div class="status-row"><span>Production bridge</span><strong class="ok">NONE</strong></div><div class="status-row"><span>External egress</span><strong class="amber">DEPLOYMENT POLICY</strong></div></article>
       <article class="card"><div class="section-head"><h2>Telemetry integrity</h2><span class="tag">LOCAL MVP</span></div><div class="status-row"><span>Event format</span><strong>JSONL</strong></div><div class="status-row"><span>In-memory cap</span><strong>1,000 default</strong></div><div class="status-row"><span>Durable storage</span><strong class="amber">LOCAL FILE</strong></div></article>
@@ -71,7 +84,50 @@
         $("events-list").innerHTML = '<div class="empty">Dashboard is static until the local API is running.</div>';
       }
     }
-    refresh(); setInterval(refresh, 5000);
+
+    const assessmentForm = document.getElementById("assessment-form");
+    assessmentForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const status = document.getElementById("assessment-status");
+      const results = document.getElementById("assessment-results");
+      const target = document.getElementById("assessment-target").value.trim();
+      const consent = document.getElementById("assessment-consent").checked;
+      if (!consent) { status.textContent = "Please confirm authorization and the disclaimer first."; return; }
+      status.textContent = "Running bounded local analysis…";
+      results.innerHTML = "";
+      const button = document.getElementById("assessment-submit");
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/security/assess", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target,consent:true})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Assessment failed");
+        status.textContent = "Scan complete · " + data.mode + " · " + (data.findings || []).length + " finding(s)";
+        const findings = data.findings || [];
+        results.innerHTML = findings.length ? findings.map((finding,index) =>
+          '<div class="event"><span class="event-dot" style="background:' + (finding.severity === "high" || finding.severity === "critical" ? "var(--red)" : "var(--amber)") + '"></span><div><strong>' + esc(finding.title) + ' · ' + esc(finding.severity) + '</strong><small>' + esc(finding.target) + (finding.line ? ':' + esc(finding.line) : '') + ' · ' + esc(finding.rule_id) + '</small><p>' + esc(finding.details) + '</p><p>' + esc(finding.recommendation) + '</p><button data-analyze="' + index + '" style="padding:7px 10px;margin:4px 6px 4px 0">Analyze fix</button><button data-approve="' + index + '" style="padding:7px 10px;margin:4px">Approve proposal</button><div id="proposal-' + index + '" class="meta"></div></div></div>'
+        ).join("") : '<div class="empty">No matching patterns found in the bounded local scan. This does not prove the target is secure.</div>';
+        results.querySelectorAll("[data-analyze]").forEach(el => el.addEventListener("click", () => runProposal(data.scan_id, Number(el.dataset.analyze), false)));
+        results.querySelectorAll("[data-approve]").forEach(el => el.addEventListener("click", () => {
+          if (confirm("Approve this remediation proposal for human review? No code will be changed automatically.")) runProposal(data.scan_id, Number(el.dataset.approve), true);
+        }));
+      } catch (error) { status.textContent = error.message || "Assessment failed"; }
+      finally { button.disabled = false; }
+    });
+    async function runProposal(scanId, index, approve) {
+      const output = document.getElementById("proposal-" + index);
+      output.textContent = "Preparing recommendation…";
+      try {
+        const action = approve ? "approve" : "analyze";
+        const response = await fetch("/api/security/assess/" + encodeURIComponent(scanId) + "/findings/" + index + "/" + action, {
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(approve ? {approved:true} : {})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to prepare recommendation");
+        output.textContent = (data.proposal?.recommendation || data.recommendation || data.message || "Proposal ready") + (data.proposal?.caveat ? " Note: " + data.proposal.caveat : "") + (data.source_changed === false ? " [No files changed]" : "");
+      } catch (error) { output.textContent = error.message || "Request failed"; }
+    }
+\n    refresh(); setInterval(refresh, 5000);
   </script>
 </body>
 </html>
