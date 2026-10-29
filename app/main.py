@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.ai_security import scan_target, propose_remediation
@@ -116,6 +117,22 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
 )
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "SECURITYMATRIX_CORS_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["X-Request-ID", "X-SecurityMatrix-Decision"],
+)
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
 
@@ -183,6 +200,21 @@ async def dashboard() -> HTMLResponse:
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     return {"status": "ok", "service": "securitymatrix", "sandbox": "synthetic-only"}
+
+
+@app.get("/api/config")
+async def public_config() -> dict[str, Any]:
+    """Non-secret runtime details for the standalone GitHub Pages frontend."""
+    return {
+        "service": "securitymatrix",
+        "repository": os.getenv("GITHUB_REPOSITORY", "zopair/security_matrix"),
+        "github_api": "https://api.github.com/repos/zopair/security_matrix",
+        "scanner_enabled": True,
+        "ai_remediation_enabled": bool(
+            os.getenv("OPENAI_API_KEY") and os.getenv("SECURITYMATRIX_GITHUB_TOKEN")
+        ),
+        "cors_origins_configured": len(CORS_ORIGINS),
+    }
 
 
 @app.get("/api/metrics")
