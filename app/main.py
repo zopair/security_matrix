@@ -5,6 +5,7 @@ Synthetic data only. Heuristics are not proof that a request came from an AI age
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from app.ai_security import scan_target, propose_remediation
 from app.deception import ENABLED as DECEPTION_ENABLED
 from app.deception import router as deception_router
+from app.risk_evidence import RiskEvidenceEngine
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = APP_ROOT / "static"
@@ -43,6 +45,11 @@ logger = logging.getLogger("securitymatrix")
 EVENTS: deque[dict[str, Any]] = deque(maxlen=MAX_EVENTS)
 STARTED_AT = time.time()
 ASSESSMENTS: dict[str, dict[str, Any]] = {}
+RISK_ENGINE = RiskEvidenceEngine(
+    max_events=max(100, min(int(os.getenv('SECURITYMATRIX_EVIDENCE_EVENTS', '2000')), 10000)),
+    max_incidents=max(25, min(int(os.getenv('SECURITYMATRIX_EVIDENCE_INCIDENTS', '250')), 1000)),
+    window_seconds=max(30, min(int(os.getenv('SECURITYMATRIX_EVIDENCE_WINDOW_SECONDS', '300')), 3600)),
+)
 
 SUSPICIOUS_PATHS = (
     re.compile(r"(^|/)[.]env(?:$|/)", re.I),
@@ -71,10 +78,14 @@ def classify_request(path: str, query: str, method: str) -> tuple[int, list[str]
 
 
 def record_event(event: dict[str, Any]) -> None:
-    """Keep event memory bounded and rotate the JSONL file at a fixed size."""
-    line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + chr(10)
+    """Enrich evidence locally, then persist only bounded event metadata."""
+    enrichment = RISK_ENGINE.ingest(event)
+    safe_event = dict(event)
+    safe_event.pop("actor_key", None)
+    safe_event.update(enrichment)
+    line = json.dumps(safe_event, ensure_ascii=False, separators=(",", ":")) + chr(10)
     with EVENT_LOCK:
-        EVENTS.appendleft(event)
+        EVENTS.appendleft(safe_event)
         try:
             LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
             if LOG_PATH.exists() and LOG_PATH.stat().st_size + len(line.encode("utf-8")) > MAX_LOG_BYTES:
@@ -102,6 +113,7 @@ def event_summary() -> dict[str, Any]:
         "sandbox_mode": "synthetic-only",
         "deception_enabled": DECEPTION_ENABLED,
         "security_findings": sum(1 for event in snapshot if event.get("decision") == "finding"),
+        "risk_evidence": RISK_ENGINE.summary(),
     }
 
 
@@ -161,16 +173,20 @@ async def request_gateway(request: Request, call_next):
     # Detection is telemetry only. Never turn arbitrary suspicious/unknown paths
     # into successful synthetic responses; only explicit opt-in decoy routes do that.
     response = await call_next(request)
-    if path not in {"/", "/api/events", "/api/metrics", "/api/security/findings", "/health", "/api/health"}:
+    if path not in {"/", "/api/events", "/api/metrics", "/api/security/findings", "/api/security/evidence", "/api/security/incidents", "/health", "/api/health"}:
         if path in DECOY_PATHS and response.headers.get("X-SecurityMatrix-Decision") == "decoy":
             decision = "decoy"
         elif response.status_code == 404 and score >= 35:
             decision = "suspicious_not_found"
         else:
             decision = "allow"
+        peer = request.client.host if request.client else "unknown"
+        agent = request.headers.get("user-agent", "")[:160]
+        actor_key = hashlib.blake2s(f"{peer}|{agent}".encode("utf-8", "replace"), digest_size=16).hexdigest()
         record_event({
             "timestamp": utc_now(),
             "request_id": request_id,
+            "actor_key": actor_key,
             "method": request.method,
             "path": path[:512],
             "decision": decision,
@@ -223,6 +239,20 @@ async def events(limit: int = 100) -> dict[str, Any]:
     with EVENT_LOCK:
         snapshot = list(EVENTS)[:bounded_limit]
     return {"events": snapshot, "summary": event_summary()}
+
+
+@app.get("/api/security/evidence")
+async def security_evidence(limit: int = 100) -> dict[str, Any]:
+    """Recent sanitized evidence; this endpoint never triggers a scan."""
+    bounded_limit = max(1, min(limit, 200))
+    return {"events": RISK_ENGINE.recent_events(bounded_limit), "summary": RISK_ENGINE.summary()}
+
+
+@app.get("/api/security/incidents")
+async def security_incidents(limit: int = 50) -> dict[str, Any]:
+    """Local correlation results for analyst triage; no automatic blocking."""
+    bounded_limit = max(1, min(limit, 100))
+    return {"incidents": RISK_ENGINE.incidents(bounded_limit), "summary": RISK_ENGINE.summary()}
 
 
 @app.get("/api/security/findings")
