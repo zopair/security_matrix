@@ -45,10 +45,10 @@ STARTED_AT = time.time()
 ASSESSMENTS: dict[str, dict[str, Any]] = {}
 
 SUSPICIOUS_PATHS = (
-    re.compile(r"(^|/)\\.env(?:$|/)", re.I),
+    re.compile(r"(^|/)[.]env(?:$|/)", re.I),
     re.compile(r"(^|/)(?:wp-admin|phpmyadmin|admin-console)(?:/|$)", re.I),
-    re.compile(r"(^|/)(?:\\.git|server-status)(?:/|$)", re.I),
-    re.compile(r"(^|/)(?:swagger\\.json|openapi\\.json)(?:$|/)", re.I),
+    re.compile(r"(^|/)(?:[.]git|server-status)(?:/|$)", re.I),
+    re.compile(r"(^|/)(?:swagger[.]json|openapi[.]json)(?:$|/)", re.I),
 )
 SUSPICIOUS_TERMS = ("union select", "../", "%2e%2e%2f", "<script", " or 1=1")
 
@@ -72,7 +72,7 @@ def classify_request(path: str, query: str, method: str) -> tuple[int, list[str]
 
 def record_event(event: dict[str, Any]) -> None:
     """Keep event memory bounded and rotate the JSONL file at a fixed size."""
-    line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\\n"
+    line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + chr(10)
     with EVENT_LOCK:
         EVENTS.appendleft(event)
         try:
@@ -337,21 +337,3 @@ async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResp
         if scan_id in ASSESSMENTS:
             ASSESSMENTS[scan_id].setdefault("remediation_plans", {})[str(finding_index)] = plan
     return JSONResponse(content=plan)
-
-
-@app.get("/api/decoy/assets")
-async def decoy_assets() -> JSONResponse:
-    """Explicit sample decoy data, disabled unless deception is explicitly enabled."""
-    if not DECEPTION_ENABLED:
-        return JSONResponse(status_code=404, content={"detail": "Not found"})
-    payload = {
-        "environment": "isolated-simulation",
-        "records": [
-            {"id": "SYN-2001", "name": "Synthetic service registry", "classification": "decoy"},
-            {"id": "SYN-2002", "name": "Synthetic audit index", "classification": "decoy"},
-        ],
-    }
-    encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    if len(encoded) > 2048:
-        return JSONResponse(status_code=500, content={"detail": "Synthetic response exceeds configured limit"})
-    return JSONResponse(content=payload, headers={"Cache-Control": "no-store", "X-SecurityMatrix-Decision": "decoy"})
