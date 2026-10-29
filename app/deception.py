@@ -9,7 +9,7 @@ import json
 import os
 import threading
 import time
-from collections import deque, OrderedDict
+from collections import OrderedDict, deque
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -70,7 +70,6 @@ def _response(request: Request, kind: str) -> JSONResponse:
         ],
     }
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    # Defensive assertion: templates are fixed and must remain within the configured cap.
     if len(encoded) > MAX_RESPONSE_BYTES:
         return JSONResponse(status_code=500, content={"detail": "Synthetic response exceeds configured limit"})
     return JSONResponse(
@@ -90,3 +89,9 @@ async def synthetic_master_key_dump(request: Request) -> JSONResponse:
 async def synthetic_service_registry(request: Request) -> JSONResponse:
     """Return a fixed synthetic registry only."""
     return _response(request, "registry")
+
+
+@router.get("/api/decoy/assets")
+async def synthetic_decoy_assets(request: Request) -> JSONResponse:
+    """Return the legacy sample asset route under the same opt-in and limits."""
+    return _response(request, "assets")
