@@ -9,7 +9,7 @@ GITHUB_API = "https://api.github.com"
 class AgentError(RuntimeError): pass
 def redact(text: str) -> str:
     return re.sub(r"(?i)(?:sk-[A-Za-z0-9_-]{12,}|(?:api[_-]?key|secret|password|token)\s*[:=]\s*[\'\"][^\'\"]+[\'\"])", "[REDACTED_SECRET]", text[:1800])
-def request_json(url: str, method: str = "GET", token: str | None = None, body: dict[str, Any] | None = None, timeout: int = 15) -> dict[str, Any]:
+def request_json(url: str, method: str = "GET", token: str | None = None, body: dict[str, Any] | None = None, timeout: int = 15, max_bytes: int = 24000) -> dict[str, Any]:
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "SecurityMatrix-Remediation-Agent"}
     if token: headers["Authorization"] = "Bearer " + token
     data = json.dumps(body, separators=(",", ":")).encode() if body is not None else None
@@ -74,7 +74,7 @@ def create_draft_pr(path: str, original: str, patched: str, explanation: str, fi
     api = GITHUB_API + "/repos/" + repo
     repo_info = request_json(api, token=token)
     ref = request_json(api + "/git/ref/heads/" + base, token=token); base_sha = ref["object"]["sha"]
-    file_info = request_json(api + "/contents/" + path + "?ref=" + base, token=token)
+    file_info = request_json(api + "/contents/" + path + "?ref=" + base, token=token, max_bytes=1_400_000)
     remote = base64.b64decode(file_info["content"]).decode("utf-8")
     if remote != original: raise AgentError("GitHub source changed since scan; refusing stale patch.")
     branch = "securitymatrix/ai-remediation-" + uuid.uuid4().hex[:10]
