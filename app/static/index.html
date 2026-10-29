@@ -54,11 +54,11 @@
     </section>
 
     <section class="card" style="margin-top:14px" id="ai-assessment">
-      <div class="section-head"><h2>Consent-based security scan & remediation</h2><span class="tag">SAFE LOCAL SCAN</span></div>
+      <div class="section-head"><h2>Local security scan & remediation guidance</h2><span class="tag">SAFE LOCAL SCAN</span></div>
       <p class="sub" style="margin-bottom:12px">Scan a repository-relative path in this checkout, such as <code>app</code> or <code>app/main.py</code>. An entered URL is recorded for passive review only; this MVP never contacts external URLs or runs active probes.</p>
       <label for="backend-url" style="display:block;margin:10px 0 6px">FastAPI backend URL (for scanning and telemetry)</label>
       <input id="backend-url" type="url" maxlength="300" placeholder="https://your-api.example.com or http://127.0.0.1:8000" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
-      <small class="backend-help">GitHub Pages only hosts this UI. Connect your deployed FastAPI URL here to enable scanning, telemetry and AI remediation. Do not put API keys in this field.</small>
+      <small class="backend-help">GitHub Pages only hosts this UI. Connect a FastAPI URL for local repository scanning and telemetry. Remediation guidance uses local rules and GitHub-native workflows; no external AI API keys are required.</small>
       <form id="assessment-form">
         <label for="assessment-target" style="display:block;margin:10px 0 6px">Website URL or repository path</label>
         <input id="assessment-target" name="target" required maxlength="2048" placeholder="app/ or https://example.com" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
@@ -228,39 +228,30 @@
         status.textContent = "Scan complete · " + data.mode + " · " + (data.findings || []).length + " finding(s)";
         const findings = data.findings || [];
         results.innerHTML = findings.length ? findings.map((finding,index) =>
-          '<div class="event"><span class="event-dot" style="background:' + (finding.severity === "high" || finding.severity === "critical" ? "var(--red)" : "var(--amber)") + '"></span><div><strong>' + esc(finding.title) + ' · ' + esc(finding.severity) + '</strong><small>' + esc(finding.target) + (finding.line ? ':' + esc(finding.line) : '') + ' · ' + esc(finding.rule_id) + '</small><p>' + esc(finding.details) + '</p><p>' + esc(finding.recommendation) + '</p><button data-analyze="' + index + '" style="padding:7px 10px;margin:4px 6px 4px 0">Analyze fix</button><button data-approve="' + index + '" style="padding:7px 10px;margin:4px">Approve proposal</button><div id="proposal-' + index + '" class="meta"></div></div></div>'
+          '<div class="event"><span class="event-dot" style="background:' + (finding.severity === "high" || finding.severity === "critical" ? "var(--red)" : "var(--amber)") + '"></span><div><strong>' + esc(finding.title) + ' · ' + esc(finding.severity) + '</strong><small>' + esc(finding.target) + (finding.line ? ':' + esc(finding.line) : '') + ' · ' + esc(finding.rule_id) + '</small><p>' + esc(finding.details) + '</p><p>' + esc(finding.recommendation) + '</p><button data-analyze="' + index + '" style="padding:7px 10px;margin:4px 6px 4px 0">Show remediation plan</button><div id="proposal-' + index + '" class="meta"></div></div></div>'
         ).join("") : '<div class="empty">No matching patterns found in the bounded local scan. This does not prove the target is secure.</div>';
         results.querySelectorAll("[data-analyze]").forEach(el => el.addEventListener("click", () => runProposal(data.scan_id, Number(el.dataset.analyze), false)));
-        results.querySelectorAll("[data-approve]").forEach(el => el.addEventListener("click", () => {
-          if (confirm("Approve this remediation proposal for human review? No code will be changed automatically.")) runProposal(data.scan_id, Number(el.dataset.approve), true);
-        }));
+        
       } catch (error) { status.textContent = error.message || "Assessment failed"; }
       finally { button.disabled = false; }
     });
-    async function runProposal(scanId, index, approve) {
+    async function runProposal(scanId, index) {
       let base;
       try { base = apiBase(); } catch (error) { alert(error.message); return; }
       if (!base) { alert("Enter a FastAPI backend URL first."); return; }
       const output = document.getElementById("proposal-" + index);
-      output.textContent = "Preparing recommendation…";
+      output.textContent = "Preparing local remediation guidance…";
       try {
-        const action = approve ? "approve" : "analyze";
-        const response = await fetch(base + "/api/security/assess/" + encodeURIComponent(scanId) + "/findings/" + index + "/" + action, {
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body: JSON.stringify(approve ? {approved:true} : {})
+        const response = await fetch(base + "/api/security/assess/" + encodeURIComponent(scanId) + "/findings/" + index + "/analyze", {
+          method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to prepare recommendation");
-        if (data.patch_preview) {
-          output.innerHTML = '<p>' + esc(data.explanation || "AI patch proposal") + '</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:8px">' + esc(data.patch_preview) + '</pre><p>File: ' + esc(data.path || "") + ' · Preview only; not applied.</p>';
-        } else if (data.pull_request?.url) {
-          output.innerHTML = '<p>' + esc(data.message || "Draft PR created") + '</p><p><a href="' + esc(data.pull_request.url) + '" target="_blank" rel="noopener noreferrer">Open Draft Pull Request #' + esc(data.pull_request.number) + '</a></p><p>Local tests passed · No merge or deployment.</p>';
-        } else {
-          output.textContent = (data.proposal?.recommendation || data.recommendation || data.message || "Proposal ready") + (data.proposal?.caveat ? " Note: " + data.proposal.caveat : "") + (data.source_changed === false ? " [No files changed]" : "");
-        }
+        output.innerHTML = '<p><strong>Rule-based recommendation</strong></p><p>' + esc(data.recommendation || "Review and remediate this finding.") + '</p><p>' + esc(data.caveat || "Human review and tests are required.") + '</p><p>' + esc(data.message || "No files changed.") + '</p><p><a class="repo-link" href="' + esc(data.workflow_url || "https://github.com/zopair/security_matrix/actions") + '" target="_blank" rel="noopener noreferrer">Open GitHub remediation workflow ↗</a></p>';
       } catch (error) { output.textContent = error.message || "Request failed"; }
     }
-\n    refresh(); setInterval(refresh, 5000);
+
+    refresh(); setInterval(refresh, 5000);
     refreshGithubStatus(); setInterval(refreshGithubStatus, 300000);
   </script>
 </body>
