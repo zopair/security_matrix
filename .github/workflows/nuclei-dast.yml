@@ -64,11 +64,33 @@ jobs:
             -jsonl
             -o nuclei-results.jsonl
 
-      - name: Upload Nuclei report
+      - name: Normalize Nuclei findings for SOC
+        if: always()
+        run: python scripts/normalize_security_findings.py
+
+      - name: Optionally send findings to SecurityMatrix SOC
+        if: always()
+        env:
+          SECURITYMATRIX_INGEST_URL: ${{ secrets.SECURITYMATRIX_INGEST_URL }}
+          SECURITYMATRIX_INGEST_TOKEN: ${{ secrets.SECURITYMATRIX_INGEST_TOKEN }}
+        run: |
+          if [ -z "$SECURITYMATRIX_INGEST_URL" ] || [ -z "$SECURITYMATRIX_INGEST_TOKEN" ]; then
+            echo "SOC ingest secrets are not configured; findings remain in the workflow artifact."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 15 \
+            -H "Authorization: Bearer $SECURITYMATRIX_INGEST_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @security-findings.json \
+            "$SECURITYMATRIX_INGEST_URL/api/security/findings"
+
+      - name: Upload Nuclei report and normalized findings
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nuclei-dast-report-${{ github.run_id }}
           if-no-files-found: warn
           retention-days: 14
-          path: nuclei-results.jsonl
+          path: |
+            nuclei-results.jsonl
+            security-findings.json
