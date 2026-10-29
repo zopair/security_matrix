@@ -34,7 +34,7 @@ def _client_key(request: Request) -> str:
     return hashlib.blake2s(host.encode("utf-8", "replace"), digest_size=12).hexdigest()
 
 
-def _allow_request(key: str, now: float | None = None) -> bool:
+def _allow_request(key: str, now: float | None = None) -> tuple[bool, int]:
     now = time.monotonic() if now is None else now
     with _LOCK:
         hits = _HITS.get(key)
@@ -49,33 +49,61 @@ def _allow_request(key: str, now: float | None = None) -> bool:
             hits.popleft()
         if len(hits) >= MAX_HITS_PER_WINDOW:
             EVENTS.append({"event": "rate_limited", "client_key": key, "at": int(now)})
-            return False
+            return False, len(hits)
         hits.append(now)
-        EVENTS.append({"event": "decoy_hit", "client_key": key, "at": int(now)})
-        return True
+        EVENTS.append({"event": "decoy_hit", "client_key": key, "at": int(now), "sequence": len(hits)})
+        return True, len(hits)
 
 
 def _response(request: Request, kind: str) -> JSONResponse:
     if not ENABLED:
         return JSONResponse(status_code=404, content={"detail": "Not found"})
-    if not _allow_request(_client_key(request)):
+    client_key = _client_key(request)
+    allowed, hit_number = _allow_request(client_key)
+    if not allowed:
         return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}, headers={"Retry-After": str(WINDOW_SECONDS)})
-    payload = {
-        "status": "simulated",
-        "environment": "synthetic-only",
-        "reference": hashlib.sha256((kind + request.url.path).encode()).hexdigest()[:12],
-        "records": [
-            {"id": "SYN-1042", "service": "inventory", "state": "synthetic"},
-            {"id": "SYN-1043", "service": "audit-preview", "state": "synthetic"},
-        ],
-    }
+
+    # Bounded polymorphism: select from three fixed, synthetic schemas. The
+    # sequence is per client and window; no unbounded generation or real secrets.
+    profile_index = (hit_number - 1) % 3
+    reference = hashlib.sha256((kind + request.url.path + str(hit_number // 3)).encode()).hexdigest()[:12]
+    profiles = (
+        {
+            "status": "simulated",
+            "environment": "synthetic-only",
+            "reference": reference,
+            "records": [
+                {"id": "SYN-1042", "service": "inventory", "state": "synthetic"},
+                {"id": "SYN-1043", "service": "audit-preview", "state": "synthetic"},
+            ],
+        },
+        {
+            "result": "preview",
+            "mode": "isolated-simulation",
+            "trace": reference,
+            "items": [
+                {"key": "SIM-27", "component": "queue", "health": "unknown"},
+                {"key": "SIM-28", "component": "ledger-index", "health": "simulated"},
+            ],
+        },
+        {
+            "environment": "sandbox",
+            "request_ref": reference,
+            "snapshot": {
+                "revision": "synthetic-r3",
+                "services": ["catalog-preview", "audit-sample"],
+                "credentials_present": False,
+            },
+        },
+    )
+    payload = profiles[profile_index]
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_RESPONSE_BYTES:
         return JSONResponse(status_code=500, content={"detail": "Synthetic response exceeds configured limit"})
     return JSONResponse(
         status_code=200,
         content=payload,
-        headers={"Cache-Control": "no-store", "X-SecurityMatrix-Decision": "decoy"},
+        headers={"Cache-Control": "no-store", "X-SecurityMatrix-Decision": "decoy", "X-SecurityMatrix-Decoy-Profile": str(profile_index + 1)},
     )
 
 
