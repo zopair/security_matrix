@@ -30,6 +30,28 @@ The design prioritizes isolation, bounded resource use, auditable decisions, and
 - Present operational state and simulated events in a dark SOC-style dashboard.
 - Run repeatable checks through GitHub Actions.
 
+## Platform Demo
+
+Watch the SecurityMatrix platform walkthrough below. The video is hosted in this repository and uses a responsive HTML5 player; autoplay may be restricted by browser settings.
+
+<div align="center">
+  <video
+    controls
+    autoplay
+    muted
+    loop
+    playsinline
+    preload="metadata"
+    width="100%"
+    style="max-width:700px;height:auto;border-radius:12px;"
+  >
+    <source src="https://raw.githubusercontent.com/zopair/security_matrix/main/assets/gemini_generated_video_05cffc5b.mp4" type="video/mp4">
+    Your browser does not support HTML5 video. <a href="https://raw.githubusercontent.com/zopair/security_matrix/main/assets/gemini_generated_video_05cffc5b.mp4">Open the demo video directly</a>.
+  </video>
+</div>
+
+**Video file:** [assets/gemini_generated_video_05cffc5b.mp4](assets/gemini_generated_video_05cffc5b.mp4)
+
 ## Architecture & Components
 
 ```text
