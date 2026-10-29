@@ -57,11 +57,22 @@ def main() -> int:
     changed = False
     for key, fixed in desired.items():
         index, req, original = requirements[key]
+        lower_bounds = []
         upper_bounds = []
         for spec in req.specifier:
+            if spec.operator in {">", ">="}:
+                lower_bounds.append((spec.operator, spec.version))
             if spec.operator in {"<", "<="}:
                 upper_bounds.append((spec.operator, spec.version))
+        lower = max(lower_bounds, key=lambda x: Version(x[1])) if lower_bounds else None
         upper = min(upper_bounds, key=lambda x: Version(x[1])) if upper_bounds else None
+        if lower:
+            try:
+                if fixed < Version(lower[1]):
+                    print(f"Skip {req.name}: fixed version {fixed} would lower the existing minimum {lower[1]}.")
+                    continue
+            except InvalidVersion:
+                continue
         if upper:
             try:
                 if fixed >= Version(upper[1]):
