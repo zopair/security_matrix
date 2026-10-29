@@ -157,3 +157,22 @@ def test_invalid_finding_index_returns_404():
         json={},
     )
     assert response.status_code == 404
+
+def test_assessment_does_not_disclose_path_validation_details():
+    response = client.post(
+        "/api/security/assess",
+        json={"target": "../../private/secrets.txt", "consent": True},
+    )
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid or unavailable scan target"}
+    assert "private" not in response.text
+
+
+def test_assessment_rejects_unsupported_file_types():
+    response = client.post(
+        "/api/security/assess",
+        json={"target": "README.md", "consent": True},
+    )
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid or unavailable scan target"}
+
