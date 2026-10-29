@@ -24,21 +24,19 @@ def test_health_is_available():
     assert response.json()["status"] == "ok"
 
 
-def test_decoy_path_returns_only_synthetic_data():
+def test_suspicious_path_is_not_converted_to_successful_decoy():
     response = client.get("/.env")
-    assert response.status_code == 200
-    assert response.headers["X-SecurityMatrix-Decision"] == "decoy"
-    body = response.json()
-    assert body["status"] == "simulated"
-    assert all(record["id"].startswith("SYN-") for record in body["records"])
+    assert response.status_code == 404
+    assert response.headers["X-SecurityMatrix-Decision"] == "allow"
+    assert "records" not in response.json()
 
 
-def test_decoy_event_is_recorded():
+def test_suspicious_path_event_is_recorded_without_faking_success():
     client.get("/phpmyadmin")
     response = client.get("/api/events")
     assert response.status_code == 200
     assert response.json()["summary"]["event_count"] == 1
-    assert response.json()["events"][0]["decision"] == "decoy"
+    assert response.json()["events"][0]["decision"] == "suspicious_not_found"
 
 
 def test_metrics_are_bounded_and_available():
@@ -51,7 +49,6 @@ def test_dashboard_is_served():
     response = client.get("/")
     assert response.status_code == 200
     assert "SecurityMatrix" in response.text
-
 
 
 def test_scanner_ingestion_requires_configuration(monkeypatch):
@@ -158,6 +155,7 @@ def test_invalid_finding_index_returns_404():
     )
     assert response.status_code == 404
 
+
 def test_assessment_does_not_disclose_path_validation_details():
     response = client.post(
         "/api/security/assess",
@@ -175,4 +173,3 @@ def test_assessment_rejects_unsupported_file_types():
     )
     assert response.status_code == 400
     assert response.json() == {"error": "invalid or unavailable scan target"}
-
