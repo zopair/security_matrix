@@ -187,7 +187,7 @@ Security scans are bounded and do not contact arbitrary URLs. Nuclei targets onl
 
 ## Standalone GitHub dashboard
 
-The dashboard at `app/static/index.html` reads public repository status directly from GitHub's read-only REST API. It refreshes open pull requests and the latest CI, Security Scan, and Nuclei DAST runs every five minutes; it does not store a GitHub token in the browser.
+The dashboard at `app/static/index.html` reads public repository status directly from GitHub's read-only REST API. It refreshes open pull requests and the latest CI, Security Scan, Nuclei DAST, and CodeQL runs every five minutes; it does not store a GitHub token in the browser.
 
 ### Enable GitHub Pages
 
