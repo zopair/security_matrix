@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import time
 import uuid
 from collections import Counter, deque
@@ -21,6 +22,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.ai_security import scan_target, propose_remediation
+from app.remediation_agent import AgentError, generate_patch, validate_patch, create_draft_pr
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = APP_ROOT / "static"
@@ -269,12 +271,24 @@ async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResp
     findings = assessment.get("findings", [])
     if finding_index < 0 or finding_index >= len(findings):
         return JSONResponse(status_code=404, content={"error": "finding not found"})
-    return JSONResponse(content=propose_remediation(findings[finding_index]))
+    try:
+        proposal = generate_patch(findings[finding_index])
+        assessment.setdefault("ai_proposals", {})[str(finding_index)] = proposal
+        return JSONResponse(content={
+            "finding_id": findings[finding_index].get("id"),
+            "explanation": proposal["explanation"],
+            "patch_preview": proposal["replacement"],
+            "path": proposal["path"],
+            "requires_approval": True,
+            "message": "Patch preview generated from a small redacted code excerpt. It has not been applied.",
+        })
+    except AgentError as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
 
 
 @app.post("/api/security/assess/{scan_id}/findings/{finding_index}/approve")
 async def approve_remediation(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
-    """Record explicit approval and return a reviewed proposal; never mutate source code."""
+    """On explicit approval, validate a proposed patch and open a draft PR only."""
     assessment = ASSESSMENTS.get(scan_id)
     if not assessment:
         return JSONResponse(status_code=404, content={"error": "assessment not found"})
@@ -287,19 +301,26 @@ async def approve_remediation(scan_id: str, finding_index: int, request: Request
         payload = {}
     if not isinstance(payload, dict) or payload.get("approved") is not True:
         return JSONResponse(status_code=400, content={"error": "explicit approval is required"})
-    proposal = propose_remediation(findings[finding_index])
-    approval = {
-        "approval_id": str(uuid.uuid4()),
-        "approved_at": utc_now(),
-        "scan_id": scan_id,
-        "finding_id": proposal["finding_id"],
-        "status": "approved_for_human_review",
-        "proposal": proposal,
-        "source_changed": False,
-        "message": "Approval recorded. No code was changed. A human-reviewed patch/PR workflow must be configured before source changes can be created.",
-    }
-    assessment.setdefault("approvals", []).append(approval)
-    return JSONResponse(status_code=202, content=approval)
+    try:
+        proposal = assessment.get("ai_proposals", {}).get(str(finding_index))
+        if not proposal:
+            proposal = generate_patch(findings[finding_index])
+            assessment.setdefault("ai_proposals", {})[str(finding_index)] = proposal
+        test_summary = validate_patch(proposal["path"], proposal["patched"])
+        pr = create_draft_pr(proposal["path"], proposal["original"], proposal["patched"], proposal["explanation"], findings[finding_index])
+        approval = {
+            "approval_id": str(uuid.uuid4()), "approved_at": utc_now(), "scan_id": scan_id,
+            "finding_id": findings[finding_index].get("id"), "status": "draft_pr_created",
+            "source_changed": False, "validation": {"tests_passed": True, "summary": test_summary},
+            "pull_request": pr, "message": "Draft pull request created. No merge or deployment was performed.",
+        }
+        assessment.setdefault("approvals", []).append(approval)
+        return JSONResponse(status_code=201, content=approval)
+    except AgentError as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+    except subprocess.TimeoutExpired:
+        return JSONResponse(status_code=422, content={"error": "Local validation timed out; no pull request was created."})
+
 
 
 @app.get("/api/decoy/assets")
