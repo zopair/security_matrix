@@ -50,7 +50,9 @@ jobs:
 
       - name: Run tests against proposed fix
         if: steps.remediate.outputs.changed == 'true'
-        run: pytest -q
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q
 
       - name: Re-audit proposed dependency set
         if: steps.remediate.outputs.changed == 'true'
