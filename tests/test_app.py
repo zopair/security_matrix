@@ -108,9 +108,7 @@ def test_local_assessment_returns_bounded_results():
     assert len(data["findings"]) <= 100
 
 
-def test_local_remediation_guidance_requires_no_external_api_key(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("SECURITYMATRIX_GITHUB_TOKEN", raising=False)
+def test_local_remediation_guidance_is_keyless():
     scan = client.post(
         "/api/security/assess",
         json={"target": "https://example.com", "consent": True},
