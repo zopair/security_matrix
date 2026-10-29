@@ -85,7 +85,7 @@ def scan_target(target: str) -> dict[str, Any]:
     if os.getenv("SECURITYMATRIX_ENABLE_SEMGREP", "").lower() == "true":
         try:
             result = subprocess.run(
-                ["semgrep", "scan", "--config", "p/security-audit", "--json", "--metrics", "off", str(root)],
+                ["semgrep", "scan", "--config", str(REPO_ROOT / ".semgrep" / "security.yml"), "--json", "--metrics", "off", str(root)],
                 cwd=REPO_ROOT, capture_output=True, text=True, timeout=30, check=False,
                 env={**os.environ, "SEMGREP_SEND_METRICS": "off"},
             )
