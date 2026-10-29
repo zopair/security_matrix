@@ -169,8 +169,20 @@
     $("github-refresh").addEventListener("click", refreshGithubStatus);
 
     async function refresh() {
+      let base;
+      try { base = apiBase(); } catch (error) {
+        $("system-state").textContent = "BACKEND URL INVALID";
+        $("events-list").innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
+        return;
+      }
+      if (!base) {
+        $("system-state").textContent = "GITHUB LIVE · SCANNER OFFLINE";
+        $("events-list").innerHTML = '<div class="empty">Connect a FastAPI backend URL above to enable local telemetry.</div>';
+        $("findings-list").innerHTML = '<div class="empty">Scanner reports are available when a FastAPI backend is connected.</div>';
+        return;
+      }
       try {
-        const base = apiBase(); if (!base) throw new Error("GitHub Pages is static. Enter your FastAPI backend URL above to enable telemetry and scanning."); const [metricsRes, eventsRes, findingsRes] = await Promise.all([fetch(base + "/api/metrics"), fetch(base + "/api/events?limit=12"), fetch(base + "/api/security/findings?limit=100")]);
+        const [metricsRes, eventsRes, findingsRes] = await Promise.all([fetch(base + "/api/metrics"), fetch(base + "/api/events?limit=12"), fetch(base + "/api/security/findings?limit=100")]);
         if (!metricsRes.ok || !eventsRes.ok || !findingsRes.ok) throw new Error("API unavailable");
         const metrics = await metricsRes.json(), data = await eventsRes.json(), findingsData = await findingsRes.json(), events = data.events || [];
         $("system-state").textContent = "LOCAL API CONNECTED";
