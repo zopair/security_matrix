@@ -1,0 +1,45 @@
+rules:
+  - id: securitymatrix.python.eval
+    languages:
+      - python
+    severity: ERROR
+    message: Avoid eval on data that may be influenced by a user; use a constrained parser.
+    pattern: eval(...)
+
+  - id: securitymatrix.python.subprocess-shell
+    languages:
+      - python
+    severity: ERROR
+    message: Avoid shell=True with untrusted input; use an argument list and validate each argument.
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.run(..., shell=True, ...)
+          - pattern: subprocess.Popen(..., shell=True, ...)
+          - pattern: subprocess.call(..., shell=True, ...)
+
+  - id: securitymatrix.python.debug-mode
+    languages:
+      - python
+    severity: WARNING
+    message: Disable debug mode in production and configure safe error handling.
+    pattern-regex: '(?im)^\s*(?:DEBUG|debug)\s*=\s*(?:True|true)\b'
+
+  - id: securitymatrix.hardcoded-credential
+    languages:
+      - python
+      - javascript
+      - typescript
+      - yaml
+      - json
+    severity: ERROR
+    message: Possible hard-coded credential; use a secret store and rotate it if real.
+    pattern-regex: |-
+      (?i)(api[_-]?key|secret|password|token)\s*[:=]\s*['"][^'"]{8,}['"]
+
+  - id: securitymatrix.javascript.eval
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: Avoid eval on untrusted input; use explicit dispatch or a constrained parser.
+    pattern: eval(...)
