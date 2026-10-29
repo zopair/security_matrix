@@ -117,14 +117,18 @@ def test_approval_requires_explicit_approval():
     assert response.status_code == 400
 
 
-def test_approved_proposal_does_not_modify_source():
+def test_approval_fails_closed_when_ai_is_not_configured(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("SECURITYMATRIX_GITHUB_TOKEN", "")
+    monkeypatch.setenv("GH_TOKEN", "")
     scan = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True}).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/0/approve",
         json={"approved": True},
     )
-    assert response.status_code == 202
-    assert response.json()["source_changed"] is False
+    assert response.status_code == 422
+    assert "OPENAI_API_KEY" in response.json()["error"]
 
 
 def test_ai_remediation_fails_closed_without_api_key(monkeypatch):
