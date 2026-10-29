@@ -73,9 +73,8 @@ def record_event(event: dict[str, Any]) -> None:
         with LOG_PATH.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
     except OSError:
-        # Logging failure is observable, but must not turn the app into a
-        # fail-open path to any real resource. Events remain in bounded memory.
-        logger.exception("Unable to persist event log")
+        # Keep the application available while avoiding raw exception details in logs.
+        logger.warning("Unable to persist event log; in-memory event retained")
 
 
 def event_summary() -> dict[str, Any]:
@@ -274,8 +273,12 @@ async def start_security_assessment(request: Request) -> JSONResponse:
         return JSONResponse(status_code=400, content={"error": "target must be a string"})
     try:
         result = scan_target(target)
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except ValueError:
+        # Never return exception text or filesystem details to the caller.
+        return JSONResponse(status_code=400, content={"error": "invalid or unavailable scan target"})
+    except Exception:
+        logger.warning("Local security assessment failed; details withheld")
+        return JSONResponse(status_code=500, content={"error": "security assessment failed"})
     scan_id = str(uuid.uuid4())
     assessment = {"scan_id": scan_id, "created_at": utc_now(), **result}
     ASSESSMENTS[scan_id] = assessment
