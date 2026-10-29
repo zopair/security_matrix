@@ -35,6 +35,7 @@
       <article class="card"><div class="section-head"><h2>Event activity</h2><span class="tag">Last 12 events</span></div><div id="chart" class="chart" role="img" aria-label="Bar chart of recent local event activity"></div><div class="chart-labels"><span>Oldest</span><span>Recent</span></div></article>
       <article class="card"><div class="section-head"><h2>Recent telemetry</h2><span class="tag">JSONL</span></div><div class="events" id="events-list"><div class="empty">Loading telemetry…</div></div></article>
     </section>
+    <section class="card" style="margin-top:14px"><div class="section-head"><h2>Scanner findings</h2><span class="tag">Semgrep · pip-audit · Bandit · Nuclei</span></div><div class="events" id="findings-list"><div class="empty">Waiting for authenticated scanner reports…</div></div></section>
     <section class="bottom">
       <article class="card"><div class="section-head"><h2>Gateway</h2><span class="tag">API</span></div><div class="status-row"><span>Request routing</span><strong class="ok">ONLINE</strong></div><div class="status-row"><span>Risk rules</span><strong class="ok">ACTIVE</strong></div><div class="status-row"><span>Rate controls</span><strong class="amber">EDGE REQUIRED</strong></div></article>
       <article class="card"><div class="section-head"><h2>Deception sandbox</h2><span class="tag">ISOLATED DESIGN</span></div><div class="status-row"><span>Data source</span><strong class="ok">SYNTHETIC</strong></div><div class="status-row"><span>Production bridge</span><strong class="ok">NONE</strong></div><div class="status-row"><span>External egress</span><strong class="amber">DEPLOYMENT POLICY</strong></div></article>
@@ -55,6 +56,8 @@
         $("decoy-count").textContent = metrics.decisions?.decoy ?? 0;
         $("risk-count").textContent = events.filter(e => (e.risk_score || 0) >= 35).length;
         $("finding-count").textContent = findingsData.count ?? 0;
+        const findingsList = $("findings-list");
+        findingsList.innerHTML = findingsData.findings?.length ? findingsData.findings.slice(0,8).map(f => '<div class="event"><span class="event-dot" style="background:' + (f.severity === 'critical' || f.severity === 'high' ? 'var(--red)' : 'var(--amber)') + '"></span><div><strong>' + esc(f.source) + ' · ' + esc(f.title) + '</strong><small>' + esc(f.severity) + ' · ' + esc(f.rule_id) + ' · ' + esc(f.target) + '</small></div><span class="pill">' + esc(f.outcome) + '</span></div>').join("") : '<div class="empty">No scanner findings received. Configure the optional SOC ingest secrets in GitHub Actions to stream results here.</div>';
         $("uptime").textContent = Math.floor((metrics.uptime_seconds || 0) / 60) + "m";
         const chart = $("chart"); chart.innerHTML = "";
         const heights = events.slice().reverse().map(e => Math.max(8, Math.min(100, e.risk_score || 12)));
