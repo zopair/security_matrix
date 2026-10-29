@@ -1,0 +1,6 @@
+{
+  "source": "GitHub Search API: repositories created in the last 7 days, sorted by stars",
+  "window_days": 7,
+  "minimum_stars": 5,
+  "keywords": []
+}
