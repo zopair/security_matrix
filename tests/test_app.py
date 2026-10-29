@@ -79,3 +79,49 @@ def test_scanner_ingestion_stores_sanitized_finding(monkeypatch):
     result = client.get("/api/security/findings")
     assert result.json()["count"] == 1
     assert result.json()["findings"][0]["source"] == "semgrep"
+
+
+def test_assessment_requires_explicit_consent():
+    response = client.post("/api/security/assess", json={"target": "app", "consent": False})
+    assert response.status_code == 400
+
+
+def test_assessment_rejects_path_traversal():
+    response = client.post("/api/security/assess", json={"target": "../", "consent": True})
+    assert response.status_code == 400
+
+
+def test_url_assessment_does_not_contact_external_target():
+    response = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "passive-url-only"
+    assert data["findings"][0]["rule_id"] == "SAFETY-URL-001"
+
+
+def test_local_assessment_returns_bounded_results():
+    response = client.post("/api/security/assess", json={"target": "app/ai_security.py", "consent": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "local-static-analysis"
+    assert "scan_id" in data
+    assert len(data["findings"]) <= 100
+
+
+def test_approval_requires_explicit_approval():
+    scan = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True}).json()
+    response = client.post(
+        f"/api/security/assess/{scan['scan_id']}/findings/0/approve",
+        json={"approved": False},
+    )
+    assert response.status_code == 400
+
+
+def test_approved_proposal_does_not_modify_source():
+    scan = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True}).json()
+    response = client.post(
+        f"/api/security/assess/{scan['scan_id']}/findings/0/approve",
+        json={"approved": True},
+    )
+    assert response.status_code == 202
+    assert response.json()["source_changed"] is False
