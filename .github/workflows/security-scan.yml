@@ -1,0 +1,93 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-analysis:
+    name: Static analysis and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project and scanners
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt semgrep bandit pip-audit
+
+      - name: Semgrep scan
+        continue-on-error: true
+        run: semgrep scan --config auto --sarif --output semgrep.sarif .
+
+      - name: Dependency audit
+        continue-on-error: true
+        run: pip-audit -r requirements.txt --format json --output pip-audit.json
+
+      - name: Bandit Python security scan
+        continue-on-error: true
+        run: bandit -r app -f json -o bandit.json
+
+      - name: Normalize findings for SOC
+        if: always()
+        run: python scripts/normalize_security_findings.py
+
+      - name: Upload Semgrep findings to GitHub Code Scanning
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-securitymatrix
+
+      - name: Optionally send normalized findings to SecurityMatrix SOC
+        if: always()
+        env:
+          SECURITYMATRIX_INGEST_URL: ${{ secrets.SECURITYMATRIX_INGEST_URL }}
+          SECURITYMATRIX_INGEST_TOKEN: ${{ secrets.SECURITYMATRIX_INGEST_TOKEN }}
+        run: |
+          if [ -z "$SECURITYMATRIX_INGEST_URL" ] || [ -z "$SECURITYMATRIX_INGEST_TOKEN" ]; then
+            echo "SOC ingest secrets are not configured; findings remain in the workflow artifact."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 15 \
+            -H "Authorization: Bearer $SECURITYMATRIX_INGEST_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @security-findings.json \
+            "$SECURITYMATRIX_INGEST_URL/api/security/findings"
+
+      - name: Upload scanner reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-reports-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            semgrep.sarif
+            pip-audit.json
+            bandit.json
+            security-findings.json
