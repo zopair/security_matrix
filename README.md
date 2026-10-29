@@ -182,3 +182,6 @@ The agent sends only the finding metadata and a redacted excerpt of at most seve
 Provider requests use fixed OpenAI/GitHub API hosts, bounded response sizes and timeouts, and no user-supplied outbound URL. Rate-limit/permission responses fail closed. The GitHub token should be scoped to this repository and rotated periodically. Model output is untrusted and still requires human review. AI features are not active until secrets are configured; the system must not expose secret values in logs or UI.
 
 Note: the local test suite runs in a temporary copy of the deployed checkout. This is a bounded MVP validator, not a hardened multi-tenant sandbox. Do not expose this feature to untrusted users without adding authenticated per-user authorization, durable approval audit records, concurrency control, and stronger isolated execution.
+
+
+AI action abuse control: each client IP is limited to five AI-analysis/approval actions per ten minutes (in-memory, process-local). This reduces accidental cost spikes but is not a substitute for authenticated user accounts or a shared rate limiter in a multi-instance deployment.
