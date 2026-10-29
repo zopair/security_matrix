@@ -9,6 +9,15 @@ def setup_function():
     EVENTS.clear()
 
 
+def test_public_config_uses_open_source_security_tools():
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["external_ai_required"] is False
+    assert data["remediation_mode"] == "deterministic-open-source-rules"
+    assert {"Semgrep", "Bandit", "pip-audit", "Nuclei", "Dependabot", "GitHub Actions"}.issubset(set(data["security_tools"]))
+
+
 def test_health_is_available():
     response = client.get("/api/health")
     assert response.status_code == 200
