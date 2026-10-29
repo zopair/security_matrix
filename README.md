@@ -167,25 +167,22 @@ The dashboard includes a consent checkbox and a bounded assessment flow at `POST
 Endpoints: `POST /api/security/assess`, `GET /api/security/assess/{scan_id}`, `POST /api/security/assess/{scan_id}/findings/{index}/analyze`, and `POST /api/security/assess/{scan_id}/findings/{index}/approve`.
 
 
-## AI Remediation Agent (opt-in)
+## Open-source security analysis and remediation
 
-The AI remediation flow is disabled until deployment secrets are configured:
+SecurityMatrix does not call hosted LLMs or require external AI API keys. Remediation guidance is generated locally from explicit rule IDs in `app/ai_security.py`; it is advisory only and never edits source code or creates a PR by itself.
 
-- `OPENAI_API_KEY`: API key for the OpenAI API.
-- `SECURITYMATRIX_AI_MODEL` (optional): model name; defaults to `gpt-4.1-mini` for a low-cost, short response.
-- `SECURITYMATRIX_GITHUB_TOKEN`: fine-grained token limited to this repository, with **Contents: read/write** and **Pull requests: read/write**. Do not use a personal token with broad organization permissions.
-- `GITHUB_REPOSITORY`: `owner/repository` for the repository where the application runs.
-- `SECURITYMATRIX_GITHUB_BASE` (optional): target branch; defaults to `main`.
+### Open-source and GitHub-native components
 
-The agent sends only the finding metadata and a redacted excerpt of at most seven nearby source lines (capped at 1,800 characters) to the configured model; it does not send the full file. AI output is size-bounded and must pass path checks, unambiguous replacement checks, Python syntax validation where applicable, and the local pytest suite before a pull request is opened. Source freshness is checked against GitHub before writing. Each approval creates a **draft PR only**; the agent never merges or deploys.
+- **Semgrep Community Edition**: static application security analysis and SARIF output.
+- **Bandit**: Python-specific security linting.
+- **pip-audit**: known-vulnerability checks for Python dependencies.
+- **Nuclei**: DAST checks against the isolated loopback test instance only.
+- **Dependabot**: native dependency update and security PRs.
+- **GitHub Actions + the repository's built-in `GITHUB_TOKEN`**: CI, scheduled scans, artifacts, and review-only dependency-remediation PRs. No personal access token or third-party API key is required for these workflows.
 
-Provider requests use fixed OpenAI/GitHub API hosts, bounded response sizes and timeouts, and no user-supplied outbound URL. Rate-limit/permission responses fail closed. The GitHub token should be scoped to this repository and rotated periodically. Model output is untrusted and still requires human review. AI features are not active until secrets are configured; the system must not expose secret values in logs or UI.
+The `auto-remediation.yml` workflow proposes conservative dependency constraint changes when a compatible fixed version is identified, runs tests, and opens a review-only pull request. It does not merge or deploy. Source-code findings receive deterministic remediation guidance; a developer must implement and review the change. This avoids unsafe generic source rewriting.
 
-Note: the local test suite runs in a temporary copy of the deployed checkout. This is a bounded MVP validator, not a hardened multi-tenant sandbox. Do not expose this feature to untrusted users without adding authenticated per-user authorization, durable approval audit records, concurrency control, and stronger isolated execution.
-
-
-AI action abuse control: each client IP is limited to five AI-analysis/approval actions per ten minutes (in-memory, process-local). This reduces accidental cost spikes but is not a substitute for authenticated user accounts or a shared rate limiter in a multi-instance deployment.
-
+Security scans are bounded and do not contact arbitrary URLs. Nuclei targets only `127.0.0.1` in the workflow. Public GitHub repository status is read through the anonymous GitHub REST API; the dashboard does not store credentials in the browser.
 
 ## Standalone GitHub dashboard
 
@@ -198,10 +195,10 @@ The dashboard at `app/static/index.html` reads public repository status directly
 3. Open **Actions → Deploy SecurityMatrix dashboard to GitHub Pages** and run the workflow, or push a later dashboard change to `main`.
 4. After a successful deployment, the site URL will be `https://zopair.github.io/security_matrix/`.
 
-The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner, telemetry API, or AI remediation endpoints.
+The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner or telemetry API. The remediation guidance is local rule-based logic and does not use an external AI API.
 
 ### Connect a FastAPI scanner backend
 
-Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; API keys must remain in server-side environment variables.
+Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; No external AI API keys are required; any optional ingestion bearer token remains server-side only.
 
 GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
