@@ -38,6 +38,7 @@ logger = logging.getLogger("securitymatrix")
 EVENTS: deque[dict[str, Any]] = deque(maxlen=MAX_EVENTS)
 STARTED_AT = time.time()
 ASSESSMENTS: dict[str, dict[str, Any]] = {}
+AI_RATE_LIMITS: dict[str, deque[float]] = {}
 
 SUSPICIOUS_PATHS = (
     re.compile(r"(^|/)\.env(?:$|/)", re.I),
@@ -50,6 +51,24 @@ SUSPICIOUS_TERMS = ("union select", "../", "%2e%2e%2f", "<script", " or 1=1")
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def ai_rate_limited(request: Request) -> bool:
+    """Small per-client budget for expensive AI/PR actions; ignores spoofable forwarded headers."""
+    key = request.client.host if request.client else "unknown"
+    now = time.time()
+    recent = AI_RATE_LIMITS.setdefault(key, deque())
+    while recent and now - recent[0] > 600:
+        recent.popleft()
+    if len(recent) >= 5:
+        return True
+    recent.append(now)
+    # Bound state if many distinct clients hit the endpoint.
+    if len(AI_RATE_LIMITS) > 2000:
+        for stale_key in list(AI_RATE_LIMITS)[:500]:
+            if stale_key != key and not AI_RATE_LIMITS[stale_key]:
+                AI_RATE_LIMITS.pop(stale_key, None)
+    return False
 
 
 def classify_request(path: str, query: str, method: str) -> tuple[int, list[str]]:
@@ -264,7 +283,9 @@ async def get_security_assessment(scan_id: str) -> JSONResponse:
 
 
 @app.post("/api/security/assess/{scan_id}/findings/{finding_index}/analyze")
-async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResponse:
+async def analyze_security_finding(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
+    if ai_rate_limited(request):
+        return JSONResponse(status_code=429, content={"error": "AI action limit reached; retry after 10 minutes."})
     assessment = ASSESSMENTS.get(scan_id)
     if not assessment:
         return JSONResponse(status_code=404, content={"error": "assessment not found"})
@@ -289,6 +310,8 @@ async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResp
 @app.post("/api/security/assess/{scan_id}/findings/{finding_index}/approve")
 async def approve_remediation(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
     """On explicit approval, validate a proposed patch and open a draft PR only."""
+    if ai_rate_limited(request):
+        return JSONResponse(status_code=429, content={"error": "AI action limit reached; retry after 10 minutes."})
     assessment = ASSESSMENTS.get(scan_id)
     if not assessment:
         return JSONResponse(status_code=404, content={"error": "assessment not found"})
