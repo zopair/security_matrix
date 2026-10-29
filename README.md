@@ -165,3 +165,20 @@ The dashboard includes a consent checkbox and a bounded assessment flow at `POST
 - This is not yet an LLM-backed autonomous patch generator. Do not describe recommendations as verified patches. A future PR integration should use a narrowly scoped GitHub App/token, create a branch and draft PR only, run tests/security checks, and never auto-merge.
 
 Endpoints: `POST /api/security/assess`, `GET /api/security/assess/{scan_id}`, `POST /api/security/assess/{scan_id}/findings/{index}/analyze`, and `POST /api/security/assess/{scan_id}/findings/{index}/approve`.
+
+
+## AI Remediation Agent (opt-in)
+
+The AI remediation flow is disabled until deployment secrets are configured:
+
+- `OPENAI_API_KEY`: API key for the OpenAI API.
+- `SECURITYMATRIX_AI_MODEL` (optional): model name; defaults to `gpt-4.1-mini` for a low-cost, short response.
+- `SECURITYMATRIX_GITHUB_TOKEN`: fine-grained token limited to this repository, with **Contents: read/write** and **Pull requests: read/write**. Do not use a personal token with broad organization permissions.
+- `GITHUB_REPOSITORY`: `owner/repository` for the repository where the application runs.
+- `SECURITYMATRIX_GITHUB_BASE` (optional): target branch; defaults to `main`.
+
+The agent sends only the finding metadata and a redacted excerpt of at most seven nearby source lines (capped at 1,800 characters) to the configured model; it does not send the full file. AI output is size-bounded and must pass path checks, unambiguous replacement checks, Python syntax validation where applicable, and the local pytest suite before a pull request is opened. Source freshness is checked against GitHub before writing. Each approval creates a **draft PR only**; the agent never merges or deploys.
+
+Provider requests use fixed OpenAI/GitHub API hosts, bounded response sizes and timeouts, and no user-supplied outbound URL. Rate-limit/permission responses fail closed. The GitHub token should be scoped to this repository and rotated periodically. Model output is untrusted and still requires human review. AI features are not active until secrets are configured; the system must not expose secret values in logs or UI.
+
+Note: the local test suite runs in a temporary copy of the deployed checkout. This is a bounded MVP validator, not a hardened multi-tenant sandbox. Do not expose this feature to untrusted users without adding authenticated per-user authorization, durable approval audit records, concurrency control, and stronger isolated execution.
