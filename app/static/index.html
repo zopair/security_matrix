@@ -124,7 +124,13 @@
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to prepare recommendation");
-        output.textContent = (data.proposal?.recommendation || data.recommendation || data.message || "Proposal ready") + (data.proposal?.caveat ? " Note: " + data.proposal.caveat : "") + (data.source_changed === false ? " [No files changed]" : "");
+        if (data.patch_preview) {
+          output.innerHTML = '<p>' + esc(data.explanation || "AI patch proposal") + '</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:8px">' + esc(data.patch_preview) + '</pre><p>File: ' + esc(data.path || "") + ' · Preview only; not applied.</p>';
+        } else if (data.pull_request?.url) {
+          output.innerHTML = '<p>' + esc(data.message || "Draft PR created") + '</p><p><a href="' + esc(data.pull_request.url) + '" target="_blank" rel="noopener noreferrer">Open Draft Pull Request #' + esc(data.pull_request.number) + '</a></p><p>Local tests passed · No merge or deployment.</p>';
+        } else {
+          output.textContent = (data.proposal?.recommendation || data.recommendation || data.message || "Proposal ready") + (data.proposal?.caveat ? " Note: " + data.proposal.caveat : "") + (data.source_changed === false ? " [No files changed]" : "");
+        }
       } catch (error) { output.textContent = error.message || "Request failed"; }
     }
 \n    refresh(); setInterval(refresh, 5000);
