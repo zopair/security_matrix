@@ -5,6 +5,7 @@ must not be treated as proof that a request originated from an AI agent.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -25,7 +26,8 @@ STATIC_ROOT = APP_ROOT / "static"
 LOG_PATH = Path(os.getenv("SECURITYMATRIX_LOG_PATH", "logs/events.jsonl"))
 MAX_EVENTS = int(os.getenv("SECURITYMATRIX_MAX_EVENTS", "1000"))
 MAX_EVENTS = max(100, min(MAX_EVENTS, 10000))
-MAX_BODY_BYTES = 16_384
+MAX_BODY_BYTES = 1_048_576
+INGEST_TOKEN = os.getenv("SECURITYMATRIX_INGEST_TOKEN", "")
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("securitymatrix")
@@ -80,6 +82,7 @@ def event_summary() -> dict[str, Any]:
         "decisions": dict(by_decision),
         "uptime_seconds": max(0, int(time.time() - STARTED_AT)),
         "sandbox_mode": "synthetic-only",
+        "security_findings": sum(1 for event in EVENTS if event.get("decision") == "finding"),
     }
 
 
@@ -102,7 +105,7 @@ async def request_gateway(request: Request, call_next):
 
     # A deliberately small decoy route set; never proxies to real services.
     is_decoy_probe = score >= 35 and path not in {"/health", "/api/health", "/api/events", "/api/metrics"}
-    if is_decoy_probe:
+    if is_decoy_probe and path not in {"/api/security/findings", "/api/security/findings/ingest"}:
         event = {
             "timestamp": utc_now(),
             "request_id": request_id,
@@ -168,6 +171,57 @@ async def metrics() -> dict[str, Any]:
 async def events(limit: int = 100) -> dict[str, Any]:
     bounded_limit = max(1, min(limit, 200))
     return {"events": list(EVENTS)[:bounded_limit], "summary": event_summary()}
+
+
+@app.get("/api/security/findings")
+async def security_findings(limit: int = 100) -> dict[str, Any]:
+    """Return bounded scanner findings received by the optional authenticated ingest endpoint."""
+    bounded_limit = max(1, min(limit, 200))
+    findings = [event for event in EVENTS if event.get("decision") == "finding"]
+    return {"findings": findings[:bounded_limit], "count": len(findings)}
+
+
+@app.post("/api/security/findings")
+async def ingest_security_findings(request: Request) -> JSONResponse:
+    """Ingest normalized scanner metadata; never accept raw request/response payloads."""
+    if not INGEST_TOKEN:
+        return JSONResponse(status_code=503, content={"error": "scanner ingestion is not configured"})
+    supplied = request.headers.get("authorization", "")
+    expected = f"Bearer {INGEST_TOKEN}"
+    if not hmac.compare_digest(supplied, expected):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    raw = await request.body()
+    if len(raw) > MAX_BODY_BYTES:
+        return JSONResponse(status_code=413, content={"error": "payload too large"})
+    try:
+        payload = json.loads(raw or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JSONResponse(status_code=400, content={"error": "invalid JSON"})
+    if not isinstance(payload, dict) or not isinstance(payload.get("findings", []), list):
+        return JSONResponse(status_code=400, content={"error": "expected a findings array"})
+    incoming = payload.get("findings", [])[:100]
+    accepted = 0
+    allowed_severities = {"critical", "high", "medium", "low", "info", "unknown"}
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        severity = str(item.get("severity", "unknown")).lower()
+        if severity not in allowed_severities:
+            severity = "unknown"
+        event = {
+            "timestamp": utc_now(),
+            "decision": "finding",
+            "source": str(item.get("source", "scanner"))[:40],
+            "severity": severity,
+            "title": str(item.get("title", "Security finding"))[:240],
+            "rule_id": str(item.get("rule_id", ""))[:120],
+            "target": str(item.get("target", ""))[:300],
+            "details": str(item.get("details", ""))[:500],
+            "outcome": "reported",
+        }
+        record_event(event)
+        accepted += 1
+    return JSONResponse(status_code=202, content={"accepted": accepted, "stored_in_memory": True})
 
 
 @app.get("/api/decoy/assets")
