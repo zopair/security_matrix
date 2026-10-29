@@ -125,3 +125,22 @@ def test_approved_proposal_does_not_modify_source():
     )
     assert response.status_code == 202
     assert response.json()["source_changed"] is False
+
+
+def test_ai_remediation_fails_closed_without_api_key(monkeypatch):
+    import app.remediation_agent as agent
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    try:
+        agent.generate_patch({"target": "app/main.py", "line": 1})
+        assert False, "Expected missing API key to disable AI remediation"
+    except agent.AgentError as exc:
+        assert "OPENAI_API_KEY" in str(exc)
+
+
+def test_ai_remediation_rejects_path_traversal():
+    import app.remediation_agent as agent
+    try:
+        agent.get_source({"target": "../outside.py", "line": 1})
+        assert False, "Expected unsafe path to be rejected"
+    except agent.AgentError:
+        pass
