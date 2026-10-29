@@ -1,0 +1,74 @@
+name: Nuclei DAST
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuclei-dast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan-local-app:
+    name: Scan isolated local test instance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install app dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Start local test app
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/securitymatrix-uvicorn.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/api/health >/dev/null; then
+              echo "Local test app is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/securitymatrix-uvicorn.log
+          exit 1
+
+      - name: Run Nuclei against loopback only
+        uses: projectdiscovery/nuclei-action@v3
+        with:
+          args: >-
+            -u http://127.0.0.1:8000
+            -tags misconfig,exposure
+            -severity medium,high,critical
+            -rate-limit 2
+            -c 2
+            -timeout 5
+            -retries 0
+            -no-interactsh
+            -jsonl
+            -o nuclei-results.jsonl
+
+      - name: Upload Nuclei report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuclei-dast-report-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: nuclei-results.jsonl
