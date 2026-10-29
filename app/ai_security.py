@@ -23,25 +23,38 @@ SECRET_PATTERNS = [
     ("debug-mode", re.compile(r"(?i)(?:debug\s*=\s*True|DEBUG\s*=\s*['\"]?true)"), "Disable debug mode in production and configure safe error handling."),
 ]
 
+
+def _inside_repo(path: Path) -> bool:
+    """Containment check after resolving symlinks and relative path segments."""
+    return path == REPO_ROOT or REPO_ROOT in path.parents
+
+
 def validate_target(target: str) -> dict[str, str]:
     value = (target or "").strip()
     if not value or len(value) > 2048:
-        raise ValueError("Enter a repository-relative path or an http(s) URL (max 2048 characters).")
+        raise ValueError("Invalid scan target.")
     parsed = urlparse(value)
     if parsed.scheme or parsed.netloc:
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError("Only valid http(s) URLs are accepted.")
+            raise ValueError("Invalid scan target.")
         # Deliberately no outbound request: URL checks are passive-only in this MVP.
         return {"kind": "url", "target": value}
-    path = Path(value)
-    if path.is_absolute() or any(part == ".." for part in path.parts):
-        raise ValueError("Use a repository-relative path; absolute paths and '..' are not allowed.")
-    resolved = (REPO_ROOT / path).resolve()
-    if resolved != REPO_ROOT and REPO_ROOT not in resolved.parents:
-        raise ValueError("Path must remain inside the SecurityMatrix checkout.")
-    if not resolved.exists():
-        raise ValueError("That path does not exist in the configured repository checkout.")
+
+    supplied_path = Path(value)
+    if supplied_path.is_absolute() or ".." in supplied_path.parts:
+        raise ValueError("Invalid scan target.")
+    try:
+        resolved = (REPO_ROOT / supplied_path).resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        raise ValueError("Invalid scan target.") from None
+    if not _inside_repo(resolved):
+        raise ValueError("Invalid scan target.")
+    if not (resolved.is_file() or resolved.is_dir()):
+        raise ValueError("Invalid scan target.")
+    if resolved.is_file() and resolved.suffix.lower() not in ALLOWED_SUFFIXES:
+        raise ValueError("Unsupported scan target type.")
     return {"kind": "path", "target": str(resolved)}
+
 
 def scan_target(target: str) -> dict[str, Any]:
     validated = validate_target(target)
@@ -55,12 +68,28 @@ def scan_target(target: str) -> dict[str, Any]:
             "patch": None,
         })
         return {"target": validated["target"], "mode": "passive-url-only", "findings": findings}
+
     root = Path(validated["target"])
-    files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_SUFFIXES)
+    if not _inside_repo(root):
+        raise ValueError("Invalid scan target.")
+    if root.is_file():
+        files = [root]
+    else:
+        # Resolve each discovered entry and reject symlinks escaping the checkout.
+        files = []
+        for candidate in root.rglob("*"):
+            try:
+                if candidate.is_file() and candidate.suffix.lower() in ALLOWED_SUFFIXES:
+                    resolved_candidate = candidate.resolve(strict=True)
+                    if _inside_repo(resolved_candidate) and resolved_candidate.is_file():
+                        files.append(resolved_candidate)
+            except (OSError, RuntimeError, ValueError):
+                continue
+        files.sort(key=lambda item: item.as_posix())
     files = files[:MAX_FILES]
     for file in files:
         try:
-            if file.stat().st_size > MAX_FILE_BYTES:
+            if not _inside_repo(file) or file.stat().st_size > MAX_FILE_BYTES:
                 continue
             content = file.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -106,12 +135,13 @@ def scan_target(target: str) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired, ValueError):
             findings.append({
                 "id": "semgrep-unavailable", "severity": "info", "title": "Optional Semgrep scan unavailable",
-                "rule_id": "SCANNER-OPTIONAL", "target": str(root.relative_to(REPO_ROOT)),
+                "rule_id": "SCANNER-OPTIONAL", "target": root.relative_to(REPO_ROOT).as_posix(),
                 "details": "The built-in bounded pattern scan completed; Semgrep was not available or timed out.",
                 "recommendation": "Install Semgrep and set SECURITYMATRIX_ENABLE_SEMGREP=true to enable the optional local scan.",
                 "patch": None,
             })
-    return {"target": str(root.relative_to(REPO_ROOT)), "mode": "local-static-analysis", "files_checked": len(files), "findings": findings}
+    return {"target": root.relative_to(REPO_ROOT).as_posix(), "mode": "local-static-analysis", "files_checked": len(files), "findings": findings}
+
 
 def propose_remediation(finding: dict[str, Any]) -> dict[str, Any]:
     """Return a human-reviewed remediation plan, not an automatically applied patch."""
