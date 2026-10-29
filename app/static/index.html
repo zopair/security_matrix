@@ -45,6 +45,7 @@
         <div class="repo-metric"><span class="metric-label">CI</span><strong id="repo-ci-state">—</strong><span class="meta" id="repo-ci-time">Latest workflow</span></div>
         <div class="repo-metric"><span class="metric-label">Security Scan</span><strong id="repo-security-state">—</strong><span class="meta" id="repo-security-time">Latest workflow</span></div>
         <div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time">Latest workflow</span></div>
+        <div class="repo-metric"><span class="metric-label">CodeQL</span><strong id="repo-codeql-state">—</strong><span class="meta" id="repo-codeql-time">Latest workflow</span></div>
       </div>
       <div class="repo-columns">
         <div><div class="section-head"><h2>Open pull requests</h2><a class="repo-link" href="https://github.com/zopair/security_matrix/pulls" target="_blank" rel="noopener noreferrer">View all ↗</a></div><div class="events" id="github-prs"><div class="empty">Loading open pull requests…</div></div></div>
@@ -149,8 +150,8 @@
       if (results[1].status === "fulfilled") {
         const runs = results[1].value.workflow_runs || [];
         const latest = name => runs.find(run => run.name.toLowerCase() === name.toLowerCase());
-        const ci = latest("CI"), security = latest("Security Scan"), nuclei = latest("Nuclei DAST");
-        for (const [key, run] of [["ci", ci], ["security", security], ["nuclei", nuclei]]) {
+        const ci = latest("CI"), security = latest("Security Scan"), nuclei = latest("Nuclei DAST"), codeql = latest("CodeQL");
+        for (const [key, run] of [["ci", ci], ["security", security], ["nuclei", nuclei], ["codeql", codeql]]) {
           $("repo-" + key + "-state").textContent = statusText(run);
           $("repo-" + key + "-state").className = "repo-state " + statusClass(run?.status, run?.conclusion);
           $("repo-" + key + "-time").textContent = run ? ago(run.updated_at || run.created_at) : "No workflow run found";
