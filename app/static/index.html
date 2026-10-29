@@ -230,7 +230,7 @@
         results.innerHTML = findings.length ? findings.map((finding,index) =>
           '<div class="event"><span class="event-dot" style="background:' + (finding.severity === "high" || finding.severity === "critical" ? "var(--red)" : "var(--amber)") + '"></span><div><strong>' + esc(finding.title) + ' · ' + esc(finding.severity) + '</strong><small>' + esc(finding.target) + (finding.line ? ':' + esc(finding.line) : '') + ' · ' + esc(finding.rule_id) + '</small><p>' + esc(finding.details) + '</p><p>' + esc(finding.recommendation) + '</p><button data-analyze="' + index + '" style="padding:7px 10px;margin:4px 6px 4px 0">Show remediation plan</button><div id="proposal-' + index + '" class="meta"></div></div></div>'
         ).join("") : '<div class="empty">No matching patterns found in the bounded local scan. This does not prove the target is secure.</div>';
-        results.querySelectorAll("[data-analyze]").forEach(el => el.addEventListener("click", () => runProposal(data.scan_id, Number(el.dataset.analyze), false)));
+        results.querySelectorAll("[data-analyze]").forEach(el => el.addEventListener("click", () => runProposal(data.scan_id, Number(el.dataset.analyze))));
         
       } catch (error) { status.textContent = error.message || "Assessment failed"; }
       finally { button.disabled = false; }
