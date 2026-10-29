@@ -20,6 +20,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from app.ai_security import scan_target, propose_remediation
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = APP_ROOT / "static"
@@ -34,6 +35,7 @@ logger = logging.getLogger("securitymatrix")
 
 EVENTS: deque[dict[str, Any]] = deque(maxlen=MAX_EVENTS)
 STARTED_AT = time.time()
+ASSESSMENTS: dict[str, dict[str, Any]] = {}
 
 SUSPICIOUS_PATHS = (
     re.compile(r"(^|/)\.env(?:$|/)", re.I),
@@ -222,6 +224,82 @@ async def ingest_security_findings(request: Request) -> JSONResponse:
         record_event(event)
         accepted += 1
     return JSONResponse(status_code=202, content={"accepted": accepted, "stored_in_memory": True})
+
+
+@app.post("/api/security/assess")
+async def start_security_assessment(request: Request) -> JSONResponse:
+    """Run a consent-gated local static scan; URL inputs are never contacted."""
+    if request.headers.get("content-length") and int(request.headers["content-length"]) > 16_384:
+        return JSONResponse(status_code=413, content={"error": "payload too large"})
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "invalid JSON"})
+    if not isinstance(payload, dict) or payload.get("consent") is not True:
+        return JSONResponse(status_code=400, content={"error": "explicit disclaimer consent is required"})
+    target = payload.get("target")
+    if not isinstance(target, str):
+        return JSONResponse(status_code=400, content={"error": "target must be a string"})
+    try:
+        result = scan_target(target)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    scan_id = str(uuid.uuid4())
+    assessment = {"scan_id": scan_id, "created_at": utc_now(), **result}
+    ASSESSMENTS[scan_id] = assessment
+    # Keep the MVP's process memory bounded.
+    while len(ASSESSMENTS) > 100:
+        ASSESSMENTS.pop(next(iter(ASSESSMENTS)))
+    return JSONResponse(status_code=200, content=assessment)
+
+
+@app.get("/api/security/assess/{scan_id}")
+async def get_security_assessment(scan_id: str) -> JSONResponse:
+    assessment = ASSESSMENTS.get(scan_id)
+    if not assessment:
+        return JSONResponse(status_code=404, content={"error": "assessment not found; assessments are in-memory only"})
+    return JSONResponse(content=assessment)
+
+
+@app.post("/api/security/assess/{scan_id}/findings/{finding_index}/analyze")
+async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResponse:
+    assessment = ASSESSMENTS.get(scan_id)
+    if not assessment:
+        return JSONResponse(status_code=404, content={"error": "assessment not found"})
+    findings = assessment.get("findings", [])
+    if finding_index < 0 or finding_index >= len(findings):
+        return JSONResponse(status_code=404, content={"error": "finding not found"})
+    return JSONResponse(content=propose_remediation(findings[finding_index]))
+
+
+@app.post("/api/security/assess/{scan_id}/findings/{finding_index}/approve")
+async def approve_remediation(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
+    """Record explicit approval and return a reviewed proposal; never mutate source code."""
+    assessment = ASSESSMENTS.get(scan_id)
+    if not assessment:
+        return JSONResponse(status_code=404, content={"error": "assessment not found"})
+    findings = assessment.get("findings", [])
+    if finding_index < 0 or finding_index >= len(findings):
+        return JSONResponse(status_code=404, content={"error": "finding not found"})
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict) or payload.get("approved") is not True:
+        return JSONResponse(status_code=400, content={"error": "explicit approval is required"})
+    proposal = propose_remediation(findings[finding_index])
+    approval = {
+        "approval_id": str(uuid.uuid4()),
+        "approved_at": utc_now(),
+        "scan_id": scan_id,
+        "finding_id": proposal["finding_id"],
+        "status": "approved_for_human_review",
+        "proposal": proposal,
+        "source_changed": False,
+        "message": "Approval recorded. No code was changed. A human-reviewed patch/PR workflow must be configured before source changes can be created.",
+    }
+    assessment.setdefault("approvals", []).append(approval)
+    return JSONResponse(status_code=202, content=approval)
 
 
 @app.get("/api/decoy/assets")
