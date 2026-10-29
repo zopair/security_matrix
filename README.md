@@ -185,3 +185,23 @@ Note: the local test suite runs in a temporary copy of the deployed checkout. Th
 
 
 AI action abuse control: each client IP is limited to five AI-analysis/approval actions per ten minutes (in-memory, process-local). This reduces accidental cost spikes but is not a substitute for authenticated user accounts or a shared rate limiter in a multi-instance deployment.
+
+
+## Standalone GitHub dashboard
+
+The dashboard at `app/static/index.html` reads public repository status directly from GitHub's read-only REST API. It refreshes open pull requests and the latest CI, Security Scan, and Nuclei DAST runs every five minutes; it does not store a GitHub token in the browser.
+
+### Enable GitHub Pages
+
+1. Open **Settings → Pages** in this repository.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Open **Actions → Deploy SecurityMatrix dashboard to GitHub Pages** and run the workflow, or push a later dashboard change to `main`.
+4. After a successful deployment, the site URL will be `https://zopair.github.io/security_matrix/`.
+
+The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner, telemetry API, or AI remediation endpoints.
+
+### Connect a FastAPI scanner backend
+
+Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; API keys must remain in server-side environment variables.
+
+GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
