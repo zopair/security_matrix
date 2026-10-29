@@ -174,7 +174,9 @@ async def request_gateway(request: Request, call_next):
     # into successful synthetic responses; only explicit opt-in decoy routes do that.
     response = await call_next(request)
     if path not in {"/", "/api/events", "/api/metrics", "/api/security/findings", "/api/security/evidence", "/api/security/incidents", "/health", "/api/health"}:
-        if path in DECOY_PATHS and response.headers.get("X-SecurityMatrix-Decision") == "decoy":
+        if path in DECOY_PATHS and response.status_code == 429:
+            decision = "rate_limited"
+        elif path in DECOY_PATHS and response.headers.get("X-SecurityMatrix-Decision") == "decoy":
             decision = "decoy"
         elif response.status_code == 404 and score >= 35:
             decision = "suspicious_not_found"
