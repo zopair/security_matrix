@@ -1,0 +1,45 @@
+name: Refresh trending repository keywords
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trending-keywords
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch, normalize, and deduplicate keywords
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/refresh_trending_keywords.py
+
+      - name: Commit meaningful changes only
+        run: |
+          if git diff --quiet -- config/trending_keywords.json; then
+            echo "No meaningful keyword update; no commit needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/trending_keywords.json
+          git commit -m "chore: refresh trending repository keywords"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${{ github.token }}" | base64 -w0)" push origin HEAD:main
