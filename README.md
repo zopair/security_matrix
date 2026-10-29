@@ -152,3 +152,16 @@ This project is intended to be distributed under the MIT License. See [LICENSE](
 ---
 
 **SecurityMatrix | AI Deception & Threat Neutralization Grid**
+
+## Consent-Based Security Assessment & Remediation
+
+The dashboard includes a consent checkbox and a bounded assessment flow at `POST /api/security/assess`.
+
+- Repository-relative paths are scanned locally with a bounded pattern-based static check (maximum 250 files, 256 KB per file, and 100 findings).
+- Optional local Semgrep is enabled only when `SECURITYMATRIX_ENABLE_SEMGREP=true`; the process has a 30-second timeout.
+- URL inputs are **passive-only**: they are validated and reported, but the server does not contact the URL or run Nuclei against it. Consent is not proof of ownership and does not make arbitrary active scanning safe.
+- The remediation helper provides specific review guidance and a caveat. The approval endpoint records explicit approval for human review; it does **not** modify source code or open a pull request in this version.
+- Scan sessions are kept in bounded process memory (up to 100) and disappear when the process restarts. The built-in pattern checks can miss vulnerabilities and produce false positives.
+- This is not yet an LLM-backed autonomous patch generator. Do not describe recommendations as verified patches. A future PR integration should use a narrowly scoped GitHub App/token, create a branch and draft PR only, run tests/security checks, and never auto-merge.
+
+Endpoints: `POST /api/security/assess`, `GET /api/security/assess/{scan_id}`, `POST /api/security/assess/{scan_id}/findings/{index}/analyze`, and `POST /api/security/assess/{scan_id}/findings/{index}/approve`.
