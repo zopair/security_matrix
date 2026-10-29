@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import time
 import uuid
 from collections import Counter, deque
@@ -23,7 +22,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.ai_security import scan_target, propose_remediation
-from app.remediation_agent import AgentError, generate_patch, validate_patch, create_draft_pr
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = APP_ROOT / "static"
@@ -39,7 +37,6 @@ logger = logging.getLogger("securitymatrix")
 EVENTS: deque[dict[str, Any]] = deque(maxlen=MAX_EVENTS)
 STARTED_AT = time.time()
 ASSESSMENTS: dict[str, dict[str, Any]] = {}
-AI_RATE_LIMITS: dict[str, deque[float]] = {}
 
 SUSPICIOUS_PATHS = (
     re.compile(r"(^|/)\.env(?:$|/)", re.I),
@@ -52,24 +49,6 @@ SUSPICIOUS_TERMS = ("union select", "../", "%2e%2e%2f", "<script", " or 1=1")
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def ai_rate_limited(request: Request) -> bool:
-    """Small per-client budget for expensive AI/PR actions; ignores spoofable forwarded headers."""
-    key = request.client.host if request.client else "unknown"
-    now = time.time()
-    recent = AI_RATE_LIMITS.setdefault(key, deque())
-    while recent and now - recent[0] > 600:
-        recent.popleft()
-    if len(recent) >= 5:
-        return True
-    recent.append(now)
-    # Bound state if many distinct clients hit the endpoint.
-    if len(AI_RATE_LIMITS) > 2000:
-        for stale_key in list(AI_RATE_LIMITS)[:500]:
-            if stale_key != key and not AI_RATE_LIMITS[stale_key]:
-                AI_RATE_LIMITS.pop(stale_key, None)
-    return False
 
 
 def classify_request(path: str, query: str, method: str) -> tuple[int, list[str]]:
@@ -210,9 +189,9 @@ async def public_config() -> dict[str, Any]:
         "repository": os.getenv("GITHUB_REPOSITORY", "zopair/security_matrix"),
         "github_api": "https://api.github.com/repos/zopair/security_matrix",
         "scanner_enabled": True,
-        "ai_remediation_enabled": bool(
-            os.getenv("OPENAI_API_KEY") and os.getenv("SECURITYMATRIX_GITHUB_TOKEN")
-        ),
+        "remediation_mode": "deterministic-open-source-rules",
+        "external_ai_required": False,
+        "security_tools": ["Semgrep", "Bandit", "pip-audit", "Nuclei", "Dependabot", "GitHub Actions"],
         "cors_origins_configured": len(CORS_ORIGINS),
     }
 
@@ -315,67 +294,25 @@ async def get_security_assessment(scan_id: str) -> JSONResponse:
 
 
 @app.post("/api/security/assess/{scan_id}/findings/{finding_index}/analyze")
-async def analyze_security_finding(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
-    if ai_rate_limited(request):
-        return JSONResponse(status_code=429, content={"error": "AI action limit reached; retry after 10 minutes."})
+async def analyze_security_finding(scan_id: str, finding_index: int) -> JSONResponse:
+    """Return deterministic, local remediation guidance without external model/API calls."""
     assessment = ASSESSMENTS.get(scan_id)
     if not assessment:
         return JSONResponse(status_code=404, content={"error": "assessment not found"})
     findings = assessment.get("findings", [])
     if finding_index < 0 or finding_index >= len(findings):
         return JSONResponse(status_code=404, content={"error": "finding not found"})
-    try:
-        proposal = generate_patch(findings[finding_index])
-        assessment.setdefault("ai_proposals", {})[str(finding_index)] = proposal
-        return JSONResponse(content={
-            "finding_id": findings[finding_index].get("id"),
-            "explanation": proposal["explanation"],
-            "patch_preview": proposal["replacement"],
-            "path": proposal["path"],
-            "requires_approval": True,
-            "message": "Patch preview generated from a small redacted code excerpt. It has not been applied.",
-        })
-    except AgentError as exc:
-        return JSONResponse(status_code=503, content={"error": str(exc)})
-
-
-@app.post("/api/security/assess/{scan_id}/findings/{finding_index}/approve")
-async def approve_remediation(scan_id: str, finding_index: int, request: Request) -> JSONResponse:
-    """On explicit approval, validate a proposed patch and open a draft PR only."""
-    if ai_rate_limited(request):
-        return JSONResponse(status_code=429, content={"error": "AI action limit reached; retry after 10 minutes."})
-    assessment = ASSESSMENTS.get(scan_id)
-    if not assessment:
-        return JSONResponse(status_code=404, content={"error": "assessment not found"})
-    findings = assessment.get("findings", [])
-    if finding_index < 0 or finding_index >= len(findings):
-        return JSONResponse(status_code=404, content={"error": "finding not found"})
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-    if not isinstance(payload, dict) or payload.get("approved") is not True:
-        return JSONResponse(status_code=400, content={"error": "explicit approval is required"})
-    try:
-        proposal = assessment.get("ai_proposals", {}).get(str(finding_index))
-        if not proposal:
-            proposal = generate_patch(findings[finding_index])
-            assessment.setdefault("ai_proposals", {})[str(finding_index)] = proposal
-        test_summary = validate_patch(proposal["path"], proposal["patched"])
-        pr = create_draft_pr(proposal["path"], proposal["original"], proposal["patched"], proposal["explanation"], findings[finding_index])
-        approval = {
-            "approval_id": str(uuid.uuid4()), "approved_at": utc_now(), "scan_id": scan_id,
-            "finding_id": findings[finding_index].get("id"), "status": "draft_pr_created",
-            "source_changed": False, "validation": {"tests_passed": True, "summary": test_summary},
-            "pull_request": pr, "message": "Draft pull request created. No merge or deployment was performed.",
-        }
-        assessment.setdefault("approvals", []).append(approval)
-        return JSONResponse(status_code=201, content=approval)
-    except AgentError as exc:
-        return JSONResponse(status_code=422, content={"error": str(exc)})
-    except subprocess.TimeoutExpired:
-        return JSONResponse(status_code=422, content={"error": "Local validation timed out; no pull request was created."})
-
+    finding = findings[finding_index]
+    proposal = propose_remediation(finding)
+    plan = {
+        **proposal,
+        "mode": "deterministic-open-source",
+        "tools": ["Semgrep", "Bandit", "pip-audit", "Nuclei", "Dependabot", "GitHub Actions"],
+        "workflow_url": "https://github.com/zopair/security_matrix/actions/workflows/auto-remediation.yml",
+        "message": "Local rule-based guidance only. No external AI API, network scan, source edit, pull request, or deployment was performed.",
+    }
+    assessment.setdefault("remediation_plans", {})[str(finding_index)] = plan
+    return JSONResponse(content=plan)
 
 
 @app.get("/api/decoy/assets")
