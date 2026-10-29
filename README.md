@@ -108,6 +108,24 @@ pytest -q
 
 The repository's workflow definitions under `.github/workflows/` can run tests on pushes and pull requests. Actions are CI automation: **they do not host a persistent API service by themselves**. For a public deployment, use a supported application host, configure TLS and secrets in the host's secret manager, and keep production credentials out of Git history and workflow logs.
 
+## Security Automation
+
+GitHub Actions includes the following workflows:
+
+- `.github/workflows/security-scan.yml`: Semgrep static analysis, pip-audit dependency checks, Bandit Python checks, SARIF upload, and a normalized report artifact. Runs on pushes, pull requests, weekly schedule, and manual dispatch.
+- `.github/workflows/nuclei-dast.yml`: Nuclei scans only the temporary app started on `127.0.0.1` inside the GitHub-hosted runner. It uses bounded request rate/concurrency and disables Interactsh callbacks.
+- `.github/workflows/auto-remediation.yml`: reviews pip-audit output and proposes compatible direct-dependency constraint updates in a pull request. It never merges or deploys automatically.
+- `.github/dependabot.yml`: weekly dependency and GitHub Actions update proposals.
+
+### Optional SOC ingestion
+
+To stream normalized scanner findings into the SOC dashboard, configure these repository Actions secrets:
+
+- `SECURITYMATRIX_INGEST_URL`: base URL of the deployed SecurityMatrix instance.
+- `SECURITYMATRIX_INGEST_TOKEN`: a long random token that must match the `SECURITYMATRIX_INGEST_TOKEN` environment variable on the API service.
+
+The API accepts only bounded finding metadata at `POST /api/security/findings` and requires a Bearer token. The in-memory findings list is intended for MVP use; it is not durable storage. If the secrets are absent, reports remain available as workflow artifacts. Do not point Nuclei at a third-party host or production target without explicit authorization.
+
 ## Configuration & Operational Safety
 
 - Keep the deception environment isolated from production networks and data stores.
