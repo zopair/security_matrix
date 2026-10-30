@@ -89,7 +89,7 @@ jobs:
               "result_bytes": result.stat().st_size,
               "result_lines": sum(1 for line in result.open(encoding="utf-8") if line.strip()),
           }
-          Path("nuclei-scan-status.json").write_text(json.dumps(report) + "\\n", encoding="utf-8")
+          Path("nuclei-scan-status.json").write_text(json.dumps(report) + chr(10), encoding="utf-8")
           print(json.dumps(report))
           if outcome != "success":
               raise SystemExit("Nuclei did not complete successfully")
