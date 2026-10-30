@@ -152,6 +152,9 @@ The API accepts only bounded finding metadata at `POST /api/security/findings` a
 ## Configuration & Operational Safety
 
 - Keep the deception environment isolated from production networks and data stores.
+- Protect telemetry reads (`/api/metrics`, `/api/events`, and all `/api/security/*` routes) with a dedicated `SECURITYMATRIX_READ_TOKEN` Bearer token. Keep it separate from the scanner-only `SECURITYMATRIX_INGEST_TOKEN`.
+- For local development only, `SECURITYMATRIX_ALLOW_LOCAL_READS=true` permits unauthenticated reads only when both the TCP peer and Host header are loopback addresses. It is disabled by default; bind the development server to loopback and do not enable this exception behind a reverse proxy.
+- Never place `SECURITYMATRIX_READ_TOKEN` in the static dashboard, browser JavaScript, localStorage, or a public GitHub Pages configuration. Remote dashboards need a trusted authenticated reverse proxy/session that injects authorization server-side.
 - Use an external reverse proxy or WAF for TLS termination and edge rate limiting.
 - Set request, body-size, response-size, and session-duration limits.
 - Fail closed for access to real protected resources; a failed risk engine must never bypass authentication or authorization.
