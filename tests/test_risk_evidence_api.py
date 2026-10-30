@@ -9,7 +9,7 @@ def test_suspicious_requests_create_local_correlated_evidence(monkeypatch, tmp_p
     monkeypatch.setattr(main, "RISK_ENGINE", RiskEvidenceEngine())
     with main.EVENT_LOCK:
         main.EVENTS.clear()
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer test-read-secret"})
 
     first = client.get("/.env", headers={"user-agent": "p1-test-agent"})
     second = client.get("/phpmyadmin", headers={"user-agent": "p1-test-agent"})
@@ -30,7 +30,7 @@ def test_actor_hash_is_not_exposed_in_public_event_log(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "RISK_ENGINE", RiskEvidenceEngine())
     with main.EVENT_LOCK:
         main.EVENTS.clear()
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer test-read-secret"})
     client.get("/.env", headers={"user-agent": "privacy-test-agent"})
     payload = client.get("/api/events").json()
     assert "actor_key" not in payload["events"][0]
