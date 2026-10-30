@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
 
 from app.main import app, EVENTS
+import app.main as main_module
+
+main_module.READ_TOKEN = "test-read-secret"
 
 client = TestClient(app, headers={"Authorization": "Bearer test-read-secret"})
 unauthenticated_client = TestClient(app)
