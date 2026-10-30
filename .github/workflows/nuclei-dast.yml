@@ -53,6 +53,7 @@ jobs:
           exit 1
 
       - name: Run Nuclei against loopback only
+        id: nuclei
         uses: projectdiscovery/nuclei-action@32a91c0da7be14c07b0ade6c14fa0f6e78d97c9c # v3.1.0
         with:
           args: >-
@@ -67,12 +68,39 @@ jobs:
             -jsonl
             -o nuclei-results.jsonl
 
-      - name: Normalize Nuclei findings for SOC
+      - name: Record Nuclei scan outcome
         if: always()
+        env:
+          NUCLEI_OUTCOME: ${{ steps.nuclei.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = Path("nuclei-results.jsonl")
+          outcome = os.environ.get("NUCLEI_OUTCOME", "unknown")
+          if outcome == "success" and not result.is_file():
+              raise SystemExit("Nuclei reported success but produced no result file")
+          if not result.exists():
+              result.touch()
+          report = {
+              "status": "completed" if outcome == "success" else outcome,
+              "result_bytes": result.stat().st_size,
+              "result_lines": sum(1 for line in result.open(encoding="utf-8") if line.strip()),
+          }
+          Path("nuclei-scan-status.json").write_text(json.dumps(report) + "\\n", encoding="utf-8")
+          print(json.dumps(report))
+          if outcome != "success":
+              raise SystemExit("Nuclei did not complete successfully")
+          PY
+
+      - name: Normalize Nuclei findings for SOC
+        if: steps.nuclei.outcome == 'success'
         run: python scripts/normalize_security_findings.py
 
       - name: Optionally send findings to SecurityMatrix SOC
-        if: always()
+        if: steps.nuclei.outcome == 'success'
         env:
           SECURITYMATRIX_INGEST_URL: ${{ secrets.SECURITYMATRIX_INGEST_URL }}
           SECURITYMATRIX_INGEST_TOKEN: ${{ secrets.SECURITYMATRIX_INGEST_TOKEN }}
@@ -96,4 +124,5 @@ jobs:
           retention-days: 14
           path: |
             nuclei-results.jsonl
+            nuclei-scan-status.json
             security-findings.json
