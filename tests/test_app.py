@@ -2,11 +2,41 @@ from fastapi.testclient import TestClient
 
 from app.main import app, EVENTS
 
-client = TestClient(app)
+client = TestClient(app, headers={"Authorization": "Bearer test-read-secret"})
+unauthenticated_client = TestClient(app)
 
 
 def setup_function():
     EVENTS.clear()
+
+
+def test_read_endpoints_reject_unauthenticated_requests():
+    paths = [
+        "/api/metrics", "/api/events", "/api/security/evidence",
+        "/api/security/incidents", "/api/security/findings",
+    ]
+    for path in paths:
+        response = unauthenticated_client.get(path)
+        assert response.status_code == 401, path
+        assert response.json() == {"error": "unauthorized"}
+        assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_read_endpoints_accept_valid_read_token(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "read-secret")
+    response = unauthenticated_client.get(
+        "/api/security/evidence", headers={"Authorization": "Bearer read-secret"}
+    )
+    assert response.status_code == 200
+
+
+def test_read_endpoints_fail_closed_when_read_token_is_not_configured(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "")
+    monkeypatch.setattr(main_module, "ALLOW_LOCAL_READS", False)
+    response = unauthenticated_client.get("/api/events")
+    assert response.status_code == 401
 
 
 def test_public_config_uses_open_source_security_tools():
