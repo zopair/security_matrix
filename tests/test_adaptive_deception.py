@@ -13,7 +13,7 @@ def test_decoy_profiles_change_but_remain_synthetic_and_bounded(monkeypatch, tmp
     with deception._LOCK:
         deception._HITS.clear()
         deception.EVENTS.clear()
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer test-read-secret"})
 
     responses = [
         client.get("/api/v1/admin/master-key-dump"),
@@ -35,7 +35,7 @@ def test_decoy_rate_limit_is_recorded_as_evidence(monkeypatch, tmp_path):
     with deception._LOCK:
         deception._HITS.clear()
         deception.EVENTS.clear()
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer test-read-secret"})
     assert client.get("/api/v1/internal/service-registry").status_code == 200
     limited = client.get("/api/v1/internal/service-registry")
     assert limited.status_code == 429
