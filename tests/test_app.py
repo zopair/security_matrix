@@ -42,6 +42,21 @@ def test_read_endpoints_fail_closed_when_read_token_is_not_configured(monkeypatc
     assert response.status_code == 401
 
 
+def test_local_read_exception_requires_loopback_peer_and_host(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "")
+    monkeypatch.setattr(main_module, "ALLOW_LOCAL_READS", True)
+    local_client = TestClient(
+        app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    )
+    assert local_client.get("/api/events").status_code == 200
+
+    non_loopback_peer = TestClient(
+        app, base_url="http://localhost", client=("testclient", 12345)
+    )
+    assert non_loopback_peer.get("/api/events").status_code == 401
+
+
 def test_public_config_uses_open_source_security_tools():
     response = client.get("/api/config")
     assert response.status_code == 200
