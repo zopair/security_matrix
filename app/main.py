@@ -35,6 +35,8 @@ MAX_LOG_BYTES = max(65536, min(int(os.getenv("SECURITYMATRIX_MAX_LOG_BYTES", "10
 MAX_BODY_BYTES = 1_048_576
 MAX_ASSESS_BODY_BYTES = 16_384
 INGEST_TOKEN = os.getenv("SECURITYMATRIX_INGEST_TOKEN", "")
+READ_TOKEN = os.getenv("SECURITYMATRIX_READ_TOKEN", "")
+ALLOW_LOCAL_READS = os.getenv("SECURITYMATRIX_ALLOW_LOCAL_READS", "false").lower() == "true"
 DECOY_PATHS = {"/api/v1/admin/master-key-dump", "/api/v1/internal/service-registry", "/api/decoy/assets"}
 EVENT_LOCK = threading.Lock()
 ASSESSMENT_LOCK = threading.Lock()
@@ -163,8 +165,40 @@ app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 app.include_router(deception_router)
 
 
+def is_trusted_local_request(request: Request) -> bool:
+    """Allow unauthenticated reads only for explicitly enabled loopback development."""
+    if not ALLOW_LOCAL_READS or request.client is None:
+        return False
+    peer = request.client.host
+    host = request.headers.get("host", "").split(":", 1)[0].strip("[]").lower()
+    return peer in {"127.0.0.1", "::1", "localhost"} and host in {"127.0.0.1", "::1", "localhost"}
+
+
+def read_api_authorized(request: Request) -> bool:
+    if is_trusted_local_request(request):
+        return True
+    if not READ_TOKEN:
+        return False
+    supplied = request.headers.get("authorization", "")
+    return hmac.compare_digest(supplied, f"Bearer {READ_TOKEN}")
+
+
 @app.middleware("http")
 async def request_gateway(request: Request, call_next):
+    path = request.url.path
+    protected_read = (
+        path in {"/api/metrics", "/api/events"}
+        or path.startswith("/api/security/")
+    )
+    # Scanner ingestion has its own separate, write-only credential.
+    scanner_ingest = path == "/api/security/findings" and request.method == "POST"
+    if protected_read and not scanner_ingest and request.method != "OPTIONS":
+        if not read_api_authorized(request):
+            return JSONResponse(
+                status_code=401,
+                content={"error": "unauthorized"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     request_id = request.headers.get("x-request-id", str(uuid.uuid4()))[:128]
     path = request.url.path
     query = request.url.query[:2048]
