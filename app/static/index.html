@@ -1,82 +1,89 @@
 <!doctype html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>SecurityMatrix | SOC</title>
-  <style>
-    :root{color-scheme:dark;--bg:#080d18;--panel:#101a2a;--line:#24334b;--muted:#91a2bd;--text:#e8efff;--cyan:#4de2d0;--blue:#5f8cff;--amber:#ffc46b;--red:#ff6d86}
-    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% 0%,#142442 0,transparent 40%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
-    .shell{max-width:1440px;margin:auto;padding:26px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:22px}
-    .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border:1px solid #2f6f83;border-radius:12px;display:grid;place-items:center;color:var(--cyan);font-weight:900;background:#0d2533}.eyebrow{color:var(--cyan);font-size:11px;letter-spacing:.16em;text-transform:uppercase}.title{margin:2px 0;font-size:24px;letter-spacing:-.04em}.sub{color:var(--muted);margin:0}.live{display:flex;align-items:center;gap:8px;color:var(--cyan);font-size:12px;border:1px solid #24564f;padding:8px 12px;border-radius:99px}.dot{width:7px;height:7px;background:var(--cyan);border-radius:50%;box-shadow:0 0 12px #4de2d0}
-    .notice{margin:20px 0;padding:12px 14px;border:1px solid #6a512b;background:#211a11;color:#ffd89b;border-radius:10px}.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}.card{background:linear-gradient(150deg,#121e30,#0e1726);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.metric-label{color:var(--muted);font-size:12px}.metric{font-size:30px;font-weight:750;letter-spacing:-.04em;margin:8px 0}.meta{font-size:12px;color:var(--muted)}.accent{color:var(--cyan)}.amber{color:var(--amber)}.red{color:var(--red)}
-    .main{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;margin-top:14px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.section-head h2{font-size:14px;margin:0}.tag{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--cyan);border:1px solid #24564f;padding:4px 7px;border-radius:5px}
-    .chart{height:180px;display:flex;align-items:end;gap:10px;border-bottom:1px solid var(--line);padding:14px 4px 0;background:repeating-linear-gradient(to bottom,transparent 0,transparent 43px,#233148 44px)}.bar{flex:1;min-width:5px;border-radius:5px 5px 0 0;background:linear-gradient(0deg,#235f80,#4de2d0);opacity:.88}.chart-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;padding-top:8px}
-    .events{display:flex;flex-direction:column;gap:0}.event{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;padding:13px 0;border-bottom:1px solid #1d2a3f;align-items:start}.event:last-child{border-bottom:0}.event-dot{width:7px;height:7px;margin-top:6px;border-radius:50%;background:var(--amber)}.event strong{font-size:12px;display:block;overflow-wrap:anywhere}.event small{color:var(--muted)}.pill{font-size:10px;color:var(--amber);background:#302414;border-radius:5px;padding:3px 6px}.empty{color:var(--muted);padding:22px 0;text-align:center}
-    .bottom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}.status-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #1d2a3f}.status-row:last-child{border-bottom:0}.ok{color:var(--cyan)}footer{color:#687c99;text-align:center;font-size:11px;padding:24px 0 4px}
-    .repo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.repo-metric{padding:13px;border:1px solid var(--line);border-radius:10px;background:#0b1422;min-width:0}.repo-metric strong{display:block;font-size:20px;margin-top:5px;overflow-wrap:anywhere}.repo-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.repo-link{color:var(--cyan);text-decoration:none}.repo-link:hover{text-decoration:underline}.repo-state{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 7px;font-size:10px;text-transform:uppercase;white-space:nowrap}.state-success{color:var(--cyan);border-color:#24564f}.state-failure{color:var(--red);border-color:#6b2c3b}.state-pending{color:var(--amber);border-color:#6a512b}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.refresh-button{background:#17263c;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:8px 11px;cursor:pointer}.backend-help{display:block;color:var(--muted);font-size:11px;margin-top:5px}@media(max-width:900px){.repo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.repo-columns{grid-template-columns:1fr}}@media(max-width:520px){.repo-grid{grid-template-columns:1fr 1fr}.repo-metric strong{font-size:17px}}
-    @media(max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.main{grid-template-columns:1fr}.bottom{grid-template-columns:1fr 1fr}}@media(max-width:520px){.shell{padding:16px}.grid,.bottom{grid-template-columns:1fr 1fr}.metric{font-size:24px}.title{font-size:20px}.card{padding:14px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080d18"><meta name="description" content="SecurityMatrix — simple, consent-based security checks for your code and applications.">
+<title>SecurityMatrix — Secure with clarity</title>
+<style>
+:root{color-scheme:dark;--bg:#080d18;--panel:#101a2a;--panel2:#0c1524;--line:#263751;--muted:#9aabc5;--text:#edf4ff;--cyan:#55e6d2;--blue:#6d91ff;--red:#ff718b;--amber:#ffd080;--glow:rgba(85,230,210,.24}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#193456 0,transparent 52%),var(--bg);color:var(--text);font:15px/1.65 Inter,"Segoe UI",Tahoma,Arial,sans-serif}
+button,input{font:inherit}.shell{width:min(920px,100% - 36px);margin:auto;padding:24px 0 44px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:64px}.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border:1px solid #397e88;border-radius:13px;display:grid;place-items:center;color:var(--cyan);font-weight:900;background:#102a38;box-shadow:0 0 24px rgba(85,230,210,.12)}.brand-name{font-size:18px;font-weight:800;letter-spacing:-.03em}.brand-caption{font-size:11px;color:var(--muted)}.top-actions{display:flex;align-items:center;gap:10px}.lang{border:1px solid var(--line);background:#101b2c;color:var(--text);padding:8px 13px;border-radius:9px;cursor:pointer}.connection{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.hero{text-align:center;max-width:760px;margin:0 auto 30px}.eyebrow{display:inline-flex;align-items:center;gap:8px;color:var(--cyan);font-size:11px;letter-spacing:.12em;text-transform:uppercase;border:1px solid #285a5d;background:#0d222a;padding:6px 11px;border-radius:99px}.hero h1{font-size:clamp(30px,5vw,48px);line-height:1.2;letter-spacing:-.045em;margin:18px 0 12px}.hero h1 span{color:var(--cyan)}.hero p{color:var(--muted);max-width:620px;margin:0 auto}
+.panel{background:linear-gradient(150deg,rgba(19,32,52,.96),rgba(12,21,36,.98));border:1px solid var(--line);border-radius:20px;padding:clamp(18px,4vw,30px);box-shadow:0 24px 80px rgba(0,0,0,.22)}.field-label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0 2px 10px;font-size:13px;font-weight:700}.field-hint{font-size:11px;color:var(--muted);font-weight:400}.target-wrap{position:relative;padding:2px;border-radius:15px;background:linear-gradient(110deg,var(--cyan),var(--blue),var(--cyan));background-size:220% 100%;animation:neon-flow 6s linear infinite;box-shadow:0 0 18px rgba(85,230,210,.18),0 0 42px rgba(109,145,255,.08)}.target-wrap:focus-within{box-shadow:0 0 0 3px rgba(85,230,210,.12),0 0 28px rgba(85,230,210,.34),0 0 65px rgba(109,145,255,.14)}.target-wrap input{width:100%;height:62px;border:0;outline:0;border-radius:13px;background:#091321;color:var(--text);padding:0 18px;direction:ltr;text-align:left;font-size:15px}.target-wrap input::placeholder{color:#70839f}.target-wrap:after{content:"";position:absolute;inset:-4px;border-radius:18px;border:1px solid rgba(85,230,210,.15);pointer-events:none;animation:neon-pulse 2.8s ease-in-out infinite}
+@keyframes neon-flow{to{background-position:220% 0}}@keyframes neon-pulse{0%,100%{opacity:.25;transform:scale(1)}50%{opacity:.85;transform:scale(1.006)}}
+.consent{display:flex;gap:11px;align-items:flex-start;margin:19px 2px;color:var(--muted);font-size:12px}.consent input{accent-color:var(--cyan);margin-top:5px;flex:0 0 auto}.primary{width:100%;border:0;border-radius:12px;padding:14px 18px;background:linear-gradient(100deg,var(--cyan),#83dff1);color:#06201f;font-weight:850;cursor:pointer;box-shadow:0 8px 24px rgba(85,230,210,.13);transition:transform .2s,filter .2s}.primary:hover{filter:brightness(1.07);transform:translateY(-1px)}.primary:disabled{opacity:.55;cursor:wait;transform:none}.status{min-height:24px;margin:13px 2px 0;color:var(--muted);font-size:12px}.results{margin-top:12px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 0}.step{border:1px solid var(--line);background:rgba(8,16,29,.55);border-radius:12px;padding:12px;text-align:center}.step-num{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;margin:0 auto 6px;background:#173746;color:var(--cyan);font-size:11px;font-weight:800}.step strong{display:block;font-size:11px}.step small{color:var(--muted);font-size:10px}
+.safe-note{display:flex;gap:10px;align-items:flex-start;margin:16px 2px 0;color:var(--muted);font-size:11px}.safe-note b{color:var(--amber)}.advanced{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}.advanced summary{cursor:pointer;color:var(--muted);font-size:12px}.advanced-content{padding-top:12px}.advanced-content label{display:block;margin:8px 0;font-size:12px;color:var(--muted)}.advanced-content input{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:#080f1c;color:var(--text);direction:ltr;text-align:left}.meta{font-size:11px;color:var(--muted)}
+.github{margin-top:20px}.github summary{cursor:pointer;font-size:12px;color:var(--muted)}.github-inner{padding-top:14px}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.refresh-button{background:#17263c;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}.repo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.repo-metric{padding:11px;border:1px solid var(--line);border-radius:10px;background:#0b1422;min-width:0}.repo-metric strong{display:block;font-size:15px;margin-top:4px;overflow-wrap:anywhere}.metric-label{font-size:10px;color:var(--muted)}.repo-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}.repo-link{color:var(--cyan);text-decoration:none}.repo-link:hover{text-decoration:underline}.repo-state{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 7px;font-size:10px}.state-success{color:var(--cyan);border-color:#24564f}.state-failure{color:var(--red);border-color:#6b2c3b}.state-pending{color:var(--amber);border-color:#6a512b}.events{display:flex;flex-direction:column}.event{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:9px;padding:10px 0;border-bottom:1px solid #1d2a3f;align-items:start}.event-dot{width:7px;height:7px;margin-top:7px;border-radius:50%;background:var(--amber)}.event strong{font-size:11px;display:block;overflow-wrap:anywhere}.event small{display:block;color:var(--muted);font-size:10px}.pill{font-size:10px;color:var(--amber);background:#302414;border-radius:5px;padding:3px 6px}.empty{color:var(--muted);padding:16px 0;text-align:center;font-size:11px}footer{text-align:center;color:#71839e;font-size:10px;padding:24px 0 0}
+[hidden],.compat{display:none!important}html[dir="ltr"] .consent{direction:ltr;text-align:left}html[dir="ltr"] .field-label{direction:ltr}html[dir="ltr"] .top{direction:ltr}
+@media(max-width:620px){.shell{width:min(100% - 24px,920px);padding-top:16px}.top{margin-bottom:42px}.connection{display:none}.steps{grid-template-columns:repeat(2,1fr)}.repo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.repo-columns{grid-template-columns:1fr}.panel{border-radius:16px}.target-wrap input{height:58px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+</style>
 </head>
 <body>
-  <main class="shell">
-    <header class="top">
-      <div class="brand"><div class="logo">SM</div><div><div class="eyebrow">Defensive intelligence grid</div><h1 class="title">SecurityMatrix <span style="color:#91a2bd;font-weight:400">/ SOC</span></h1><p class="sub">Cyber deception · telemetry · containment visibility</p></div></div>
-      <div class="live"><span class="dot"></span><span id="system-state">CONNECTING TO LOCAL API</span></div>
-    </header>
-    <div class="notice"><strong>SIMULATION MODE</strong> — All decoy records and incident visuals are synthetic. This dashboard does not claim to identify or neutralize real attackers.</div>
-    <section class="grid" aria-label="Security metrics">
-      <article class="card"><div class="metric-label">Observed events</div><div class="metric" id="events-count">—</div><div class="meta">Bounded local event buffer</div></article>
-      <article class="card"><div class="metric-label">Decoy responses</div><div class="metric accent" id="decoy-count">—</div><div class="meta">Synthetic-only responses</div></article>
-      <article class="card"><div class="metric-label">High-risk signals</div><div class="metric amber" id="risk-count">—</div><div class="meta">Rule matches, not attribution</div></article>
-      <article class="card"><div class="metric-label">Scanner findings</div><div class="metric red" id="finding-count">—</div><div class="meta">Normalized security reports</div></article><article class="card"><div class="metric-label">Gateway uptime</div><div class="metric" id="uptime">—</div><div class="meta">Since process start</div></article>
-    </section>
-    <section class="main">
-      <article class="card"><div class="section-head"><h2>Event activity</h2><span class="tag">Last 12 events</span></div><div id="chart" class="chart" role="img" aria-label="Bar chart of recent local event activity"></div><div class="chart-labels"><span>Oldest</span><span>Recent</span></div></article>
-      <article class="card"><div class="section-head"><h2>Recent telemetry</h2><span class="tag">JSONL</span></div><div class="events" id="events-list"><div class="empty">Loading telemetry…</div></div></article>
-    </section>
-    <section class="card" style="margin-top:14px"><div class="section-head"><h2>Scanner findings</h2><span class="tag">Semgrep · pip-audit · Bandit · Nuclei</span></div><div class="events" id="findings-list"><div class="empty">Waiting for authenticated scanner reports…</div></div></section>
-
-    <section class="card" style="margin-top:14px" id="github-live">
-      <div class="section-head"><div><h2>GitHub repository · live status</h2><p class="sub">Read-only data fetched directly from the public GitHub API.</p></div><div class="toolbar"><span id="github-state" class="repo-state state-pending">Connecting</span><button id="github-refresh" class="refresh-button" type="button">Refresh now</button></div></div>
-      <div class="repo-grid" aria-label="Repository status metrics">
-        <div class="repo-metric"><span class="metric-label">Open pull requests</span><strong id="repo-pr-count">—</strong><span class="meta">Fixes and dependency updates</span></div>
-        <div class="repo-metric"><span class="metric-label">CI</span><strong id="repo-ci-state">—</strong><span class="meta" id="repo-ci-time">Latest workflow</span></div>
-        <div class="repo-metric"><span class="metric-label">Security Scan</span><strong id="repo-security-state">—</strong><span class="meta" id="repo-security-time">Latest workflow</span></div>
-        <div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time">Latest workflow</span></div>
-        <div class="repo-metric"><span class="metric-label">CodeQL</span><strong id="repo-codeql-state">—</strong><span class="meta" id="repo-codeql-time">Latest workflow</span></div>
-      </div>
-      <div class="repo-columns">
-        <div><div class="section-head"><h2>Open pull requests</h2><a class="repo-link" href="https://github.com/zopair/security_matrix/pulls" target="_blank" rel="noopener noreferrer">View all ↗</a></div><div class="events" id="github-prs"><div class="empty">Loading open pull requests…</div></div></div>
-        <div><div class="section-head"><h2>Latest workflow runs</h2><a class="repo-link" href="https://github.com/zopair/security_matrix/actions" target="_blank" rel="noopener noreferrer">View Actions ↗</a></div><div class="events" id="github-workflows"><div class="empty">Loading workflow status…</div></div></div>
-      </div>
-      <p class="meta" id="github-updated" style="margin-top:12px">No GitHub data loaded yet.</p>
-    </section>
-
-    <section class="card" style="margin-top:14px" id="ai-assessment">
-      <div class="section-head"><h2>Local security scan & remediation guidance</h2><span class="tag">SAFE LOCAL SCAN</span></div>
-      <p class="sub" style="margin-bottom:12px">Scan a repository-relative path in this checkout, such as <code>app</code> or <code>app/main.py</code>. An entered URL is recorded for passive review only; this MVP never contacts external URLs or runs active probes.</p>
-      <label for="backend-url" style="display:block;margin:10px 0 6px">FastAPI backend URL (for scanning and telemetry)</label>
-      <input id="backend-url" type="url" maxlength="300" placeholder="https://your-api.example.com or http://127.0.0.1:8000" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
-      <small class="backend-help">GitHub Pages only hosts this UI. Connect a FastAPI URL for local repository scanning and telemetry. Remediation guidance uses local rules and GitHub-native workflows; no external AI API keys are required.</small>
-      <form id="assessment-form">
-        <label for="assessment-target" style="display:block;margin:10px 0 6px">Website URL or repository path</label>
-        <input id="assessment-target" name="target" required maxlength="2048" placeholder="app/ or https://example.com" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#080f1c;color:var(--text)">
-        <label style="display:flex;gap:10px;align-items:flex-start;margin:14px 0;color:var(--muted)"><input id="assessment-consent" type="checkbox" required style="margin-top:4px"><span>I confirm I own this code/target or have explicit written authorization. I understand the scan is limited, may miss issues, and is not a guarantee of security. No external URL will be actively scanned by this MVP.</span></label>
-        <button id="assessment-submit" type="submit" style="padding:11px 16px;border:0;border-radius:8px;background:var(--cyan);color:#06201e;font-weight:800;cursor:pointer">Start Scan & AI Analysis</button>
-      </form>
-      <p id="assessment-status" class="meta" role="status" style="margin-top:12px">Consent is required before scanning.</p>
-      <div id="assessment-results" class="events"></div>
-    </section>
-\n    <section class="bottom">
-      <article class="card"><div class="section-head"><h2>Gateway</h2><span class="tag">API</span></div><div class="status-row"><span>Request routing</span><strong class="ok">ONLINE</strong></div><div class="status-row"><span>Risk rules</span><strong class="ok">ACTIVE</strong></div><div class="status-row"><span>Rate controls</span><strong class="amber">EDGE REQUIRED</strong></div></article>
-      <article class="card"><div class="section-head"><h2>Deception sandbox</h2><span class="tag">ISOLATED DESIGN</span></div><div class="status-row"><span>Data source</span><strong class="ok">SYNTHETIC</strong></div><div class="status-row"><span>Production bridge</span><strong class="ok">NONE</strong></div><div class="status-row"><span>External egress</span><strong class="amber">DEPLOYMENT POLICY</strong></div></article>
-      <article class="card"><div class="section-head"><h2>Telemetry integrity</h2><span class="tag">LOCAL MVP</span></div><div class="status-row"><span>Event format</span><strong>JSONL</strong></div><div class="status-row"><span>In-memory cap</span><strong>1,000 default</strong></div><div class="status-row"><span>Durable storage</span><strong class="amber">LOCAL FILE</strong></div></article>
-    </section>
-    <footer>SecurityMatrix · Defensive cyber-deception reference implementation · Verify controls before production deployment</footer>
-  </main>
-  <script>
+<main class="shell">
+<header class="top">
+<div class="brand"><div class="logo">SM</div><div><div class="brand-name">SecurityMatrix</div><div class="brand-caption" data-i18n="brandCaption">Simple security for every developer</div></div></div>
+<div class="top-actions"><div class="connection"><span class="dot"></span><span id="system-state" data-i18n="connecting">جارٍ الاتصال</span></div><button class="lang" id="language-toggle" type="button" aria-label="Switch language">EN</button></div>
+</header>
+<section class="hero">
+<div class="eyebrow" data-i18n="eyebrow">فحص أمني بموافقتك</div>
+<h1 data-i18n-html="headline">أمّن مشروعك<br><span>بخطوات بسيطة</span></h1>
+<p data-i18n="intro">ضع رابط مشروعك أو مسار الكود، وافحصه في النطاق المصرّح به، وافهم النتائج قبل اتخاذ أي قرار.</p>
+</section>
+<section class="panel">
+<form id="assessment-form">
+<label class="field-label" for="assessment-target"><span data-i18n="targetLabel">رابط المستودع أو مسار المشروع</span><span class="field-hint" data-i18n="targetHint">GitHub URL أو مسار محلي</span></label>
+<div class="target-wrap"><input id="assessment-target" name="target" type="text" required maxlength="2048" autocomplete="url" placeholder="https://github.com/owner/repository أو app/" data-i18n-placeholder="targetPlaceholder"></div>
+<label class="consent"><input id="assessment-consent" type="checkbox" required><span data-i18n="consent">أؤكد أنني أملك هذا المشروع أو لدي تصريح واضح لفحصه. أفهم أن الفحص محدود وقد لا يكتشف كل الثغرات. لن يتم فحص أي خادم إنتاجي أو رابط خارجي بشكل نشط.</span></label>
+<button id="assessment-submit" class="primary" type="submit" data-i18n="scanButton">ابدأ الفحص الأمني</button>
+</form>
+<p id="assessment-status" class="status" role="status" aria-live="polite" data-i18n="consentRequired">الموافقة مطلوبة قبل بدء الفحص.</p>
+<div id="assessment-results" class="results events"></div>
+<div class="steps" aria-label="Workflow">
+<div class="step"><span class="step-num">1</span><strong data-i18n="step1">أدخل الرابط</strong><small data-i18n="step1s">حدد المشروع</small></div>
+<div class="step"><span class="step-num">2</span><strong data-i18n="step2">وافق على الفحص</strong><small data-i18n="step2s">نطاق واضح وآمن</small></div>
+<div class="step"><span class="step-num">3</span><strong data-i18n="step3">راجع التقرير</strong><small data-i18n="step3s">افهم كل مشكلة</small></div>
+<div class="step"><span class="step-num">4</span><strong data-i18n="step4">وافق على الإصلاح</strong><small data-i18n="step4s">قرارك قبل أي تغيير</small></div>
+</div>
+<div class="safe-note"><span>盾</span><span data-i18n-html="safety"><b>حماية أولاً:</b> لا يتم تعديل ملفاتك أو دمج تغييرات تلقائيًا. التوصيات الحالية إرشادية، وأي إصلاح فعلي يحتاج موافقة واختبارات مستقلة.</span></div>
+<details class="advanced"><summary data-i18n="advanced">إعدادات الاتصال المتقدمة</summary><div class="advanced-content"><label for="backend-url" data-i18n="backendLabel">رابط خدمة الفحص (FastAPI)</label><input id="backend-url" type="url" maxlength="300" placeholder="https://your-api.example.com or http://127.0.0.1:8000"><small class="backend-help meta" data-i18n="backendHelp">GitHub Pages تعرض الواجهة فقط؛ يلزم تشغيل خدمة API منفصلة لتفعيل الفحص المحلي.</small></div></details>
+</section>
+<details class="github">
+<summary data-i18n="githubSummary">حالة المشروع على GitHub</summary><div class="github-inner" id="github-live">
+<div class="toolbar"><span id="github-state" class="repo-state state-pending">Connecting</span><button id="github-refresh" class="refresh-button" type="button" data-i18n="refresh">تحديث</button></div>
+<div class="repo-grid">
+<div class="repo-metric"><span class="metric-label">Open PRs</span><strong id="repo-pr-count">—</strong></div>
+<div class="repo-metric"><span class="metric-label">CI</span><strong id="repo-ci-state">—</strong><span class="meta" id="repo-ci-time"></span></div>
+<div class="repo-metric"><span class="metric-label">Security Scan</span><strong id="repo-security-state">—</strong><span class="meta" id="repo-security-time"></span></div>
+<div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time"></span></div>
+</div>
+<div class="repo-columns"><div><strong data-i18n="openPRs">طلبات الدمج المفتوحة</strong><div class="events" id="github-prs"><div class="empty">Loading…</div></div></div><div><strong data-i18n="workflowRuns">آخر تشغيلات الفحوصات</strong><div class="events" id="github-workflows"><div class="empty">Loading…</div></div></div></div>
+<p class="meta" id="github-updated"></p><span id="repo-codeql-state" class="compat"></span><span id="repo-codeql-time" class="compat"></span>
+</div>
+</details>
+<footer data-i18n="footer">SecurityMatrix · فحص مسؤول، ونتائج واضحة، وقرار الإصلاح بيدك.</footer>
+<div class="compat" aria-hidden="true">
+<span id="events-count"></span><span id="decoy-count"></span><span id="risk-count"></span><span id="finding-count"></span><span id="uptime"></span><div id="chart"></div><div id="events-list"></div><div id="findings-list"></div>
+</div>
+</main>
+<script>
+const translations = {
+ar:{brandCaption:"أمان بسيط لكل مطوّر",connecting:"جارٍ الاتصال",eyebrow:"فحص أمني بموافقتك",headline:"أمّن مشروعك<br><span>بخطوات بسيطة</span>",intro:"ضع رابط مشروعك أو مسار الكود، وافحصه في النطاق المصرّح به، وافهم النتائج قبل اتخاذ أي قرار.",targetLabel:"رابط المستودع أو مسار المشروع",targetHint:"GitHub URL أو مسار محلي",targetPlaceholder:"https://github.com/owner/repository أو app/",consent:"أؤكد أنني أملك هذا المشروع أو لدي تصريح واضح لفحصه. أفهم أن الفحص محدود وقد لا يكتشف كل الثغرات. لن يتم فحص أي خادم إنتاجي أو رابط خارجي بشكل نشط.",scanButton:"ابدأ الفحص الأمني",consentRequired:"الموافقة مطلوبة قبل بدء الفحص.",step1:"أدخل الرابط",step1s:"حدد المشروع",step2:"وافق على الفحص",step2s:"نطاق واضح وآمن",step3:"راجع التقرير",step3s:"افهم كل مشكلة",step4:"وافق على الإصلاح",step4s:"قرارك قبل أي تغيير",safety:"<b>حماية أولاً:</b> لا يتم تعديل ملفاتك أو دمج تغييرات تلقائيًا. التوصيات الحالية إرشادية، وأي إصلاح فعلي يحتاج موافقة واختبارات مستقلة.",advanced:"إعدادات الاتصال المتقدمة",backendLabel:"رابط خدمة الفحص (FastAPI)",backendHelp:"GitHub Pages تعرض الواجهة فقط؛ يلزم تشغيل خدمة API منفصلة لتفعيل الفحص المحلي.",githubSummary:"حالة المشروع على GitHub",refresh:"تحديث",openPRs:"طلبات الدمج المفتوحة",workflowRuns:"آخر تشغيلات الفحوصات",footer:"SecurityMatrix · فحص مسؤول، ونتائج واضحة، وقرار الإصلاح بيدك."},
+en:{brandCaption:"Simple security for every developer",connecting:"CONNECTING",eyebrow:"Consent-based security checks",headline:"Secure your project<br><span>in a few simple steps</span>",intro:"Enter your project link or code path, scan only within an authorized scope, and understand the results before taking action.",targetLabel:"Repository link or project path",targetHint:"GitHub URL or local path",targetPlaceholder:"https://github.com/owner/repository or app/",consent:"I confirm that I own this project or have explicit authorization to assess it. I understand scans are limited and may miss issues. No production server or external URL will be actively scanned.",scanButton:"Start security scan",consentRequired:"Your authorization is required before scanning.",step1:"Enter a link",step1s:"Choose a project",step2:"Approve the scan",step2s:"Clear, safe scope",step3:"Review the report",step3s:"Understand each issue",step4:"Approve a fix",step4s:"Your decision comes first",safety:"<b>Safety first:</b> Your files are not changed and no updates are merged automatically. Current recommendations are advisory; real fixes require approval and independent tests.",advanced:"Advanced connection settings",backendLabel:"Scanner service URL (FastAPI)",backendHelp:"GitHub Pages hosts the interface only. A separate API service is required to run local scans.",githubSummary:"GitHub project status",refresh:"Refresh",openPRs:"Open pull requests",workflowRuns:"Latest workflow runs",footer:"SecurityMatrix · Responsible checks, clear findings, and fixes on your terms."}
+};
+let currentLanguage="ar";
+function setLanguage(language){
+ currentLanguage=language;const dict=translations[language];document.documentElement.lang=language;document.documentElement.dir=language==="ar"?"rtl":"ltr";
+ document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
+ document.querySelectorAll("[data-i18n-html]").forEach(el=>{const key=el.dataset.i18nHtml;if(dict[key])el.innerHTML=dict[key]});
+ document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{const key=el.dataset.i18nPlaceholder;if(dict[key])el.placeholder=dict[key]});
+ $("language-toggle").textContent=language==="ar"?"EN":"عربي";
+ $("language-toggle").setAttribute("aria-label",language==="ar"?"Switch to English":"التبديل إلى العربية");
+}
+$("language-toggle").addEventListener("click",()=>setLanguage(currentLanguage==="ar"?"en":"ar"));
+setLanguage("ar");
+</script>
+<script>
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     const GITHUB_API = "https://api.github.com/repos/zopair/security_matrix";
@@ -255,5 +262,4 @@
     refresh(); setInterval(refresh, 5000);
     refreshGithubStatus(); setInterval(refreshGithubStatus, 300000);
   </script>
-</body>
-</html>
+</body></html>
