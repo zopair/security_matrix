@@ -16,13 +16,14 @@ permissions:
 
 concurrency:
   group: security-scan-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue overlapping scans so a newer commit cannot cancel an active audit.
+  cancel-in-progress: false
 
 jobs:
   static-analysis:
     name: Static analysis and dependency audit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

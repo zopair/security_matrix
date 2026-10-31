@@ -3,6 +3,8 @@ name: Nuclei DAST
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "41 4 * * 1"
   workflow_dispatch:
@@ -12,13 +14,14 @@ permissions:
 
 concurrency:
   group: nuclei-dast-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue overlapping scans rather than cancelling an in-flight security check.
+  cancel-in-progress: false
 
 jobs:
   scan-local-app:
     name: Scan isolated local test instance
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -50,6 +53,7 @@ jobs:
           exit 1
 
       - name: Run Nuclei against loopback only
+        id: nuclei
         uses: projectdiscovery/nuclei-action@32a91c0da7be14c07b0ade6c14fa0f6e78d97c9c # v3.1.0
         with:
           args: >-
@@ -58,18 +62,45 @@ jobs:
             -severity medium,high,critical
             -rate-limit 2
             -c 2
-            -timeout 5
+            -timeout 8
             -retries 0
             -no-interactsh
             -jsonl
             -o nuclei-results.jsonl
 
-      - name: Normalize Nuclei findings for SOC
+      - name: Record Nuclei scan outcome
         if: always()
+        env:
+          NUCLEI_OUTCOME: ${{ steps.nuclei.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = Path("nuclei-results.jsonl")
+          outcome = os.environ.get("NUCLEI_OUTCOME", "unknown")
+          if outcome == "success" and not result.is_file():
+              raise SystemExit("Nuclei reported success but produced no result file")
+          if not result.exists():
+              result.touch()
+          report = {
+              "status": "completed" if outcome == "success" else outcome,
+              "result_bytes": result.stat().st_size,
+              "result_lines": sum(1 for line in result.open(encoding="utf-8") if line.strip()),
+          }
+          Path("nuclei-scan-status.json").write_text(json.dumps(report) + chr(10), encoding="utf-8")
+          print(json.dumps(report))
+          if outcome != "success":
+              raise SystemExit("Nuclei did not complete successfully")
+          PY
+
+      - name: Normalize Nuclei findings for SOC
+        if: steps.nuclei.outcome == 'success'
         run: python scripts/normalize_security_findings.py
 
       - name: Optionally send findings to SecurityMatrix SOC
-        if: always()
+        if: steps.nuclei.outcome == 'success'
         env:
           SECURITYMATRIX_INGEST_URL: ${{ secrets.SECURITYMATRIX_INGEST_URL }}
           SECURITYMATRIX_INGEST_TOKEN: ${{ secrets.SECURITYMATRIX_INGEST_TOKEN }}
@@ -93,4 +124,5 @@ jobs:
           retention-days: 14
           path: |
             nuclei-results.jsonl
+            nuclei-scan-status.json
             security-findings.json

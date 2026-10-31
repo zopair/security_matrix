@@ -1,12 +1,60 @@
 from fastapi.testclient import TestClient
 
 from app.main import app, EVENTS
+import app.main as main_module
 
-client = TestClient(app)
+main_module.READ_TOKEN = "test-read-secret"
+
+client = TestClient(app, headers={"Authorization": "Bearer test-read-secret"})
+unauthenticated_client = TestClient(app)
 
 
 def setup_function():
     EVENTS.clear()
+
+
+def test_read_endpoints_reject_unauthenticated_requests():
+    paths = [
+        "/api/metrics", "/api/events", "/api/security/evidence",
+        "/api/security/incidents", "/api/security/findings",
+    ]
+    for path in paths:
+        response = unauthenticated_client.get(path)
+        assert response.status_code == 401, path
+        assert response.json() == {"error": "unauthorized"}
+        assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_read_endpoints_accept_valid_read_token(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "read-secret")
+    response = unauthenticated_client.get(
+        "/api/security/evidence", headers={"Authorization": "Bearer read-secret"}
+    )
+    assert response.status_code == 200
+
+
+def test_read_endpoints_fail_closed_when_read_token_is_not_configured(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "")
+    monkeypatch.setattr(main_module, "ALLOW_LOCAL_READS", False)
+    response = unauthenticated_client.get("/api/events")
+    assert response.status_code == 401
+
+
+def test_local_read_exception_requires_loopback_peer_and_host(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "READ_TOKEN", "")
+    monkeypatch.setattr(main_module, "ALLOW_LOCAL_READS", True)
+    local_client = TestClient(
+        app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    )
+    assert local_client.get("/api/events").status_code == 200
+
+    non_loopback_peer = TestClient(
+        app, base_url="http://localhost", client=("testclient", 12345)
+    )
+    assert non_loopback_peer.get("/api/events").status_code == 401
 
 
 def test_public_config_uses_open_source_security_tools():
@@ -97,12 +145,88 @@ def test_assessment_rejects_path_traversal():
     assert response.status_code == 400
 
 
-def test_url_assessment_does_not_contact_external_target():
+def test_assessment_rejects_non_github_external_urls():
     response = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True})
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid or unavailable scan target"}
+
+
+def test_public_github_repository_url_is_assessed_after_consent(monkeypatch):
+    seen = {}
+
+    def fake_scan(target):
+        seen["target"] = target
+        return {
+            "target": "example/project",
+            "mode": "github-repository-static-analysis",
+            "repository": "example/project",
+            "files_checked": 1,
+            "findings": [],
+        }
+
+    monkeypatch.setattr(main_module, "scan_target", fake_scan)
+    response = client.post(
+        "/api/security/assess",
+        json={"target": "https://github.com/example/project", "consent": True},
+    )
     assert response.status_code == 200
-    data = response.json()
-    assert data["mode"] == "passive-url-only"
-    assert data["findings"][0]["rule_id"] == "SAFETY-URL-001"
+    assert seen["target"] == "https://github.com/example/project"
+    assert response.json()["mode"] == "github-repository-static-analysis"
+    assert response.json()["repository"] == "example/project"
+
+
+def test_github_archive_import_is_bounded_and_extracts_source(monkeypatch):
+    import json
+    import zipfile
+    from io import BytesIO
+    import app.ai_security as scanner
+
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w") as archive:
+        archive.writestr("project-main/src/app.py", "print('safe source')\\n")
+        archive.writestr("project-main/../../escape.py", "should not escape")
+    archive_bytes = archive_buffer.getvalue()
+
+    class FakeResponse:
+        def __init__(self, payload, url):
+            self.payload = payload
+            self.url = url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, limit=-1):
+            return self.payload[:limit] if limit >= 0 else self.payload
+
+        def geturl(self):
+            return self.url
+
+    class FakeOpener:
+        def __init__(self):
+            self.calls = 0
+
+        def open(self, request, timeout):
+            self.calls += 1
+            if self.calls == 1:
+                return FakeResponse(
+                    json.dumps({"private": False, "archived": False, "size": 10, "default_branch": "main"}).encode(),
+                    "https://api.github.com/repos/example/project",
+                )
+            return FakeResponse(
+                archive_bytes,
+                "https://codeload.github.com/example/project/zip/refs/heads/main",
+            )
+
+    opener = FakeOpener()
+    monkeypatch.setattr(scanner.urllib.request, "build_opener", lambda *args: opener)
+    imported, metadata = scanner.import_github_repository("https://github.com/example/project")
+    assert metadata["repository"] == "example/project"
+    assert metadata["files_imported"] == "1"
+    assert (imported / "src" / "app.py").read_text(encoding="utf-8") == "print('safe source')\\n"
+    assert not (imported.parent / "escape.py").exists()
 
 
 def test_local_assessment_returns_bounded_results():
@@ -114,10 +238,14 @@ def test_local_assessment_returns_bounded_results():
     assert len(data["findings"]) <= 100
 
 
-def test_local_remediation_guidance_is_keyless():
+def test_local_remediation_guidance_is_keyless(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis",
+        "findings": [{"id": "fixture-1", "rule_id": "unsafe-eval", "severity": "medium", "title": "Unsafe eval", "target": "fixture.py"}],
+    })
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
@@ -130,10 +258,14 @@ def test_local_remediation_guidance_is_keyless():
     assert data["workflow_url"].endswith("/actions/workflows/auto-remediation.yml")
 
 
-def test_remediation_guidance_does_not_edit_source_or_call_external_services():
+def test_remediation_guidance_does_not_edit_source_or_call_external_services(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis",
+        "findings": [{"id": "fixture-1", "rule_id": "unsafe-eval", "severity": "medium", "title": "Unsafe eval", "target": "fixture.py"}],
+    })
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
@@ -144,10 +276,13 @@ def test_remediation_guidance_does_not_edit_source_or_call_external_services():
     assert response.json()["mode"] == "deterministic-open-source"
 
 
-def test_invalid_finding_index_returns_404():
+def test_invalid_finding_index_returns_404(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis", "findings": [],
+    })
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/99/analyze",

@@ -1,18 +1,25 @@
-"""Consent-gated, bounded security assessment and remediation proposal helpers.
+"""Consent-gated bounded static checks for local code and public GitHub archives.
 
-Only scans paths inside the configured local checkout. URL targets are validated
-but never contacted by this MVP, preventing SSRF and unauthorized active scans.
+Imported source is stored in temporary local workspaces and never executed.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
-from pathlib import Path
+import tempfile
+import urllib.request
+import zipfile
+from io import BytesIO
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+IMPORTED_ROOTS: set[Path] = set()
+IMPORTED_REPOSITORIES: dict[str, Path] = {}
 MAX_FILES = 250
 MAX_FILE_BYTES = 256_000
 ALLOWED_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".json", ".yml", ".yaml", ".toml", ".ini", ".env.example"}
@@ -26,19 +33,113 @@ SECRET_PATTERNS = [
 
 def _inside_repo(path: Path) -> bool:
     """Containment check after resolving symlinks and relative path segments."""
-    return path == REPO_ROOT or REPO_ROOT in path.parents
+    roots = (REPO_ROOT, *tuple(IMPORTED_ROOTS))
+    return any(path == root or root in path.parents for root in roots)
 
 
-def validate_target(target: str) -> dict[str, str]:
+class _GitHubRedirectGuard(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, newurl):
+        parsed = urlparse(newurl)
+        if parsed.scheme != "https" or parsed.hostname not in {"api.github.com", "codeload.github.com"}:
+            raise ValueError("Unexpected repository archive redirect.")
+        return super().redirect_request(request, response, code, message, headers, newurl)
+
+
+def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
+    """Import a public GitHub source archive with strict download and extraction bounds."""
+    parsed = urlparse(value)
+    if parsed.scheme != "https" or parsed.hostname != "github.com" or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("Only public HTTPS GitHub repository URLs are supported.")
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) not in {2, 4} or (len(parts) == 4 and parts[2] != "tree"):
+        raise ValueError("Enter a GitHub repository URL, optionally with /tree/branch.")
+    owner, repo = parts[0], parts[1].removesuffix(".git")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", owner) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", repo):
+        raise ValueError("Invalid GitHub repository URL.")
+    key = owner + "/" + repo
+    branch_hint = parts[3] if len(parts) == 4 else ""
+    cache_key = key + "@" + branch_hint
+    cached = IMPORTED_REPOSITORIES.get(cache_key)
+    if cached and cached.exists():
+        return cached, {"repository": key, "branch": branch_hint or "default", "source": "cached public archive"}
+    opener = urllib.request.build_opener(_GitHubRedirectGuard())
+    headers = {"User-Agent": "SecurityMatrix-Local-Scanner/1.0", "Accept": "application/vnd.github+json"}
+    try:
+        req = urllib.request.Request("https://api.github.com/repos/" + key, headers=headers)
+        with opener.open(req, timeout=12) as response:
+            if urlparse(response.geturl()).hostname not in {"api.github.com"}:
+                raise ValueError("Unexpected GitHub metadata redirect.")
+            metadata = json.loads(response.read(262144).decode("utf-8"))
+        if metadata.get("private") or metadata.get("archived") or int(metadata.get("size", 0) or 0) > 20000:
+            raise ValueError("Repository is private, archived, or exceeds the 20 MB repository limit.")
+        branch = parts[3] if len(parts) == 4 else str(metadata.get("default_branch") or "main")
+        if not re.fullmatch(r"[A-Za-z0-9_./-]{1,200}", branch) or ".." in PurePosixPath(branch).parts:
+            raise ValueError("Invalid repository branch.")
+        archive_url = "https://api.github.com/repos/" + key + "/zipball/" + branch
+        req = urllib.request.Request(archive_url, headers=headers)
+        with opener.open(req, timeout=20) as response:
+            if urlparse(response.geturl()).hostname not in {"codeload.github.com", "api.github.com"}:
+                raise ValueError("Unexpected GitHub archive redirect.")
+            archive_data = response.read(30 * 1024 * 1024 + 1)
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError("Could not access or download this public GitHub repository.") from None
+    if len(archive_data) > 30 * 1024 * 1024:
+        raise ValueError("Repository archive exceeds the 30 MB download limit.")
+    workspace = Path(tempfile.mkdtemp(prefix="securitymatrix-oss-"))
+    extracted = workspace / "source"
+    extracted.mkdir()
+    count = total = 0
+    try:
+        with zipfile.ZipFile(BytesIO(archive_data)) as archive:
+            members = archive.infolist()
+            if len(members) > 3000:
+                raise ValueError("Repository contains too many archive entries.")
+            for member in members:
+                if member.is_dir():
+                    continue
+                rel = PurePosixPath(member.filename)
+                if rel.is_absolute() or ".." in rel.parts or len(rel.parts) < 2:
+                    continue
+                mode = (member.external_attr >> 16) & 0o170000
+                if mode == 0o120000 or Path(rel.name).suffix.lower() not in ALLOWED_SUFFIXES:
+                    continue
+                if member.file_size > MAX_FILE_BYTES:
+                    continue
+                total += member.file_size
+                if total > 40 * 1024 * 1024:
+                    raise ValueError("Extracted repository source exceeds the 40 MB limit.")
+                destination = extracted.joinpath(*rel.parts[1:])
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                data = archive.read(member)
+                if len(data) == member.file_size:
+                    destination.write_bytes(data)
+                    count += 1
+        if count == 0:
+            raise ValueError("No supported source files were found.")
+    except Exception:
+        shutil.rmtree(workspace, ignore_errors=True)
+        raise
+    extracted = extracted.resolve()
+    IMPORTED_ROOTS.add(extracted)
+    IMPORTED_REPOSITORIES[cache_key] = extracted
+    while len(IMPORTED_REPOSITORIES) > 5:
+        old_key = next(iter(IMPORTED_REPOSITORIES))
+        old_path = IMPORTED_REPOSITORIES.pop(old_key)
+        IMPORTED_ROOTS.discard(old_path)
+        shutil.rmtree(old_path.parent, ignore_errors=True)
+    return extracted, {"repository": key, "branch": branch, "files_imported": str(count), "source": "public GitHub ZIP archive"}
+
+
+def validate_target(target: str):
     value = (target or "").strip()
     if not value or len(value) > 2048:
         raise ValueError("Invalid scan target.")
     parsed = urlparse(value)
     if parsed.scheme or parsed.netloc:
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError("Invalid scan target.")
-        # Deliberately no outbound request: URL checks are passive-only in this MVP.
-        return {"kind": "url", "target": value}
+        imported, metadata = import_github_repository(value)
+        return {"kind": "github", "target": str(imported), **metadata}
 
     supplied_path = Path(value)
     if supplied_path.is_absolute() or ".." in supplied_path.parts:
@@ -59,16 +160,6 @@ def validate_target(target: str) -> dict[str, str]:
 def scan_target(target: str) -> dict[str, Any]:
     validated = validate_target(target)
     findings: list[dict[str, Any]] = []
-    if validated["kind"] == "url":
-        findings.append({
-            "id": "url-passive-only", "severity": "info", "title": "URL accepted for passive review only",
-            "rule_id": "SAFETY-URL-001", "target": validated["target"],
-            "details": "No network request or active probe was sent. Provide a repository-relative source path for local static analysis.",
-            "recommendation": "Run a separately authorized scan from an isolated environment if active testing is required.",
-            "patch": None,
-        })
-        return {"target": validated["target"], "mode": "passive-url-only", "findings": findings}
-
     root = Path(validated["target"])
     if not _inside_repo(root):
         raise ValueError("Invalid scan target.")
@@ -135,12 +226,22 @@ def scan_target(target: str) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired, ValueError):
             findings.append({
                 "id": "semgrep-unavailable", "severity": "info", "title": "Optional Semgrep scan unavailable",
-                "rule_id": "SCANNER-OPTIONAL", "target": root.relative_to(REPO_ROOT).as_posix(),
+                "rule_id": "SCANNER-OPTIONAL", "target": (validated["repository"] if validated["kind"] == "github" else root.relative_to(REPO_ROOT).as_posix()),
                 "details": "The built-in bounded pattern scan completed; Semgrep was not available or timed out.",
                 "recommendation": "Install Semgrep and set SECURITYMATRIX_ENABLE_SEMGREP=true to enable the optional local scan.",
                 "patch": None,
             })
-    return {"target": root.relative_to(REPO_ROOT).as_posix(), "mode": "local-static-analysis", "files_checked": len(files), "findings": findings}
+    imported = validated["kind"] == "github"
+    return {
+        "target": validated.get("repository", root.relative_to(REPO_ROOT).as_posix()),
+        "mode": "github-repository-static-analysis" if imported else "local-static-analysis",
+        "repository": validated.get("repository"),
+        "branch": validated.get("branch"),
+        "files_imported": int(validated.get("files_imported", 0)) if imported else None,
+        "files_checked": len(files),
+        "findings": findings,
+        "limitations": ["Public GitHub repositories only", "30 MB archive download and 40 MB extracted source limits", "3,000 archive entries maximum", "At most 250 supported files and 100 findings", "Static checks only; no code execution, build, dependency installation, or active DAST"],
+    }
 
 
 def propose_remediation(finding: dict[str, Any]) -> dict[str, Any]:
