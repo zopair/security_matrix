@@ -146,7 +146,7 @@ def test_assessment_rejects_path_traversal():
 
 
 def test_assessment_rejects_non_github_external_urls():
-    response = client.post("/api/security/assess", json={"target": "app/ai_security.py", "consent": True})
+    response = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True})
     assert response.status_code == 400
     assert response.json() == {"error": "invalid or unavailable scan target"}
 
