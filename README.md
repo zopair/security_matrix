@@ -27,7 +27,7 @@ The design prioritizes isolation, bounded resource use, auditable decisions, and
 - Detect suspicious request patterns using transparent, explainable rules.
 - Keep synthetic data and decoy behavior separate from production data and services.
 - Capture useful, privacy-conscious event records for investigation.
-- Present operational state and simulated events in a dark SOC-style dashboard.
+- Give developers a simple bilingual (Arabic/English) consent-first scan workflow with clear, human-readable findings.
 - Run repeatable checks through GitHub Actions.
 
 ## Platform Demo
@@ -90,7 +90,7 @@ Structured events should include a timestamp, request/session identifier, event 
 - Risk-based routing to normal handling, monitoring, throttling, or a decoy response.
 - Synthetic decoy data designed to avoid disclosure of real user information.
 - Structured telemetry for reviewing observed tactics, techniques, and procedures (TTPs).
-- Dark SOC dashboard for service health, risk distribution, and event timelines.
+- Minimal Arabic/English scanner interface with an animated repository-link field and explicit authorization.
 - Automated tests and CI checks through GitHub Actions.
 
 **Scope clarification:** Detection is heuristic, not a guarantee of identifying AI-generated traffic. SecurityMatrix does not promise to trap every attacker, prevent all intrusions, or neutralize an agent outside the controlled environment.
@@ -210,9 +210,9 @@ The `auto-remediation.yml` workflow proposes conservative dependency constraint 
 
 Security scans are bounded and do not contact arbitrary URLs. Nuclei targets only `127.0.0.1` in the workflow. Public GitHub repository status is read through the anonymous GitHub REST API; the dashboard does not store credentials in the browser.
 
-## Standalone GitHub dashboard
+## Simple bilingual scanner interface
 
-The dashboard at `app/static/index.html` reads public repository status directly from GitHub's read-only REST API. It refreshes open pull requests and the latest CI, Security Scan, Nuclei DAST, and CodeQL runs every five minutes; it does not store a GitHub token in the browser.
+The interface at `app/static/index.html` is designed around one primary action: enter a repository URL or local code path, confirm authorization, and review the bounded assessment. It supports Arabic RTL and English LTR, with a subtle animated neon input. Public GitHub status (open PRs, CI, Security Scan, Nuclei DAST, and CodeQL) is available in a secondary expandable section. The page does not store a GitHub token in the browser.
 
 ### Enable GitHub Pages
 
@@ -221,7 +221,7 @@ The dashboard at `app/static/index.html` reads public repository status directly
 3. Open **Actions → Deploy SecurityMatrix dashboard to GitHub Pages** and run the workflow, or push a later dashboard change to `main`.
 4. After a successful deployment, the site URL will be `https://zopair.github.io/security_matrix/`.
 
-The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner or telemetry API. The remediation guidance is local rule-based logic and does not use an external AI API.
+The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner or telemetry API. Connect a separately hosted FastAPI service to run the bounded local code assessment. URL inputs are passive-only in this MVP; the interface does not perform active DAST against arbitrary URLs. The remediation guidance is local rule-based logic and does not use an external AI API.
 
 ### Connect a FastAPI scanner backend
 
