@@ -145,12 +145,34 @@ def test_assessment_rejects_path_traversal():
     assert response.status_code == 400
 
 
-def test_url_assessment_does_not_contact_external_target():
+def test_assessment_rejects_non_github_external_urls():
     response = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True})
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid or unavailable scan target"}
+
+
+def test_public_github_repository_is_imported_and_scanned(monkeypatch, tmp_path):
+    import app.ai_security as scanner
+
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "example.py").write_text("import subprocess\\nsubprocess.run(command, shell=True)\\n", encoding="utf-8")
+    monkeypatch.setattr(scanner, "IMPORTED_ROOTS", {source.resolve()})
+    monkeypatch.setattr(
+        scanner,
+        "import_github_repository",
+        lambda value: (source.resolve(), {"repository": "example/project", "branch": "main", "files_imported": "1"}),
+    )
+    response = client.post(
+        "/api/security/assess",
+        json={"target": "https://github.com/example/project", "consent": True},
+    )
     assert response.status_code == 200
     data = response.json()
-    assert data["mode"] == "passive-url-only"
-    assert data["findings"][0]["rule_id"] == "SAFETY-URL-001"
+    assert data["mode"] == "github-repository-static-analysis"
+    assert data["repository"] == "example/project"
+    assert data["files_checked"] == 1
+    assert any(item["rule_id"] == "subprocess-shell" for item in data["findings"])
 
 
 def test_local_assessment_returns_bounded_results():
@@ -165,7 +187,7 @@ def test_local_assessment_returns_bounded_results():
 def test_local_remediation_guidance_is_keyless():
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
