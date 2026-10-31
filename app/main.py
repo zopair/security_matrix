@@ -343,7 +343,7 @@ async def ingest_security_findings(request: Request) -> JSONResponse:
 
 @app.post("/api/security/assess")
 async def start_security_assessment(request: Request) -> JSONResponse:
-    """Run a consent-gated local static scan; URL inputs are never contacted."""
+    """Run a consent-gated bounded local scan or import a public GitHub source archive."""
     raw = await read_limited_body(request, MAX_ASSESS_BODY_BYTES)
     if raw is None:
         return JSONResponse(status_code=413, content={"error": "payload too large"})
