@@ -50,14 +50,18 @@ def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", owner) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", repo):
         raise ValueError("Invalid GitHub repository URL.")
     key = owner + "/" + repo
-    cached = IMPORTED_REPOSITORIES.get(key)
+    branch_hint = parts[3] if len(parts) == 4 else ""
+    cache_key = key + "@" + branch_hint
+    cached = IMPORTED_REPOSITORIES.get(cache_key)
     if cached and cached.exists():
-        return cached, {"repository": key, "source": "cached public archive"}
+        return cached, {"repository": key, "branch": branch_hint or "default", "source": "cached public archive"}
     opener = urllib.request.build_opener()
     headers = {"User-Agent": "SecurityMatrix-Local-Scanner/1.0", "Accept": "application/vnd.github+json"}
     try:
         req = urllib.request.Request("https://api.github.com/repos/" + key, headers=headers)
         with opener.open(req, timeout=12) as response:
+            if urlparse(response.geturl()).hostname not in {"api.github.com"}:
+                raise ValueError("Unexpected GitHub metadata redirect.")
             metadata = json.loads(response.read(262144).decode("utf-8"))
         if metadata.get("private") or metadata.get("archived") or int(metadata.get("size", 0) or 0) > 20000:
             raise ValueError("Repository is private, archived, or exceeds the 20 MB repository limit.")
@@ -67,6 +71,8 @@ def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
         archive_url = "https://api.github.com/repos/" + key + "/zipball/" + branch
         req = urllib.request.Request(archive_url, headers=headers)
         with opener.open(req, timeout=20) as response:
+            if urlparse(response.geturl()).hostname not in {"codeload.github.com", "api.github.com"}:
+                raise ValueError("Unexpected GitHub archive redirect.")
             archive_data = response.read(30 * 1024 * 1024 + 1)
     except ValueError:
         raise
@@ -110,7 +116,7 @@ def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
         raise
     extracted = extracted.resolve()
     IMPORTED_ROOTS.add(extracted)
-    IMPORTED_REPOSITORIES[key] = extracted
+    IMPORTED_REPOSITORIES[cache_key] = extracted
     while len(IMPORTED_REPOSITORIES) > 5:
         old_key = next(iter(IMPORTED_REPOSITORIES))
         old_path = IMPORTED_REPOSITORIES.pop(old_key)
@@ -213,7 +219,7 @@ def scan_target(target: str) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired, ValueError):
             findings.append({
                 "id": "semgrep-unavailable", "severity": "info", "title": "Optional Semgrep scan unavailable",
-                "rule_id": "SCANNER-OPTIONAL", "target": root.relative_to(REPO_ROOT).as_posix(),
+                "rule_id": "SCANNER-OPTIONAL", "target": validated.get("repository", root.relative_to(REPO_ROOT).as_posix()),
                 "details": "The built-in bounded pattern scan completed; Semgrep was not available or timed out.",
                 "recommendation": "Install Semgrep and set SECURITYMATRIX_ENABLE_SEMGREP=true to enable the optional local scan.",
                 "patch": None,
