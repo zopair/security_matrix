@@ -140,7 +140,7 @@ async def read_limited_body(request: Request, limit: int) -> bytes | None:
 
 app = FastAPI(
     title="SecurityMatrix",
-    description="Defensive cyber-deception reference API. Synthetic data only.",
+    description="Consent-gated, bounded static source assessment for public GitHub repositories and local projects. Findings are heuristic; remediation guidance does not modify source.",
     version="0.1.0",
     docs_url="/docs",
     redoc_url=None,
