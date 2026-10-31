@@ -1,248 +1,105 @@
-# SecurityMatrix | Consent-based source security checks
+# SecurityMatrix
 
-<p align="center">
-  <strong>A lightweight, bilingual security-assessment MVP for public GitHub repositories and local source code. It imports source into a bounded local workspace, runs limited static checks, and presents findings with human-reviewed remediation guidance.</strong>
-</p>
+**A simple Arabic/English source-security assessment MVP for public GitHub repositories and local projects.**
 
-<p align="center">
-  <img alt="Status: MVP" src="https://img.shields.io/badge/status-MVP%20in%20development-blue">
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Security: Defense in depth" src="https://img.shields.io/badge/security-defense%20in%20depth-informational">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white">
-  <img alt="Automation" src="https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white">
-  <img alt="SOC Dashboard" src="https://img.shields.io/badge/UI-SOC%20Dashboard-111827">
-</p>
+SecurityMatrix lets a developer submit a public GitHub repository URL or a local source path, approve a bounded scan, review findings, and read remediation guidance. It is an early-stage static-analysis assistant—not a comprehensive security scanner.
 
-> **Security note:** SecurityMatrix is an early-stage source assessment tool, not a comprehensive vulnerability scanner. Its current repository scan imports public GitHub ZIP archives (or analyzes an existing local project path), then runs bounded pattern checks and optional local Semgrep rules. It does not execute project code, install dependencies, perform authenticated DAST, or automatically modify source files. A clean report is not proof that a project is secure.
+## What is implemented
 
-## What it does today
+- Arabic RTL / English LTR responsive interface.
+- Consent-gated assessment API protected by a separate read token (or the explicit loopback-only development exception).
+- Public GitHub repository import from ZIP archives, including an optional `/tree/branch` URL.
+- Local source analysis without executing imported project code.
+- Bounded built-in checks for possible hard-coded credentials, `eval()`, `subprocess(..., shell=True)`, and debug settings.
+- Optional local Semgrep rules when `SECURITYMATRIX_ENABLE_SEMGREP=true`.
+- Findings with severity, file path, line number, evidence excerpt, and remediation guidance.
+- Deterministic remediation suggestions for supported rules. Suggestions are advisory; no source files are edited and no fix PR is created automatically.
+- GitHub Actions for CI, CodeQL, dependency/security checks, local Nuclei DAST, and an isolated OWASP Juice Shop DAST lab.
 
-1. Accepts a public GitHub repository URL (optionally a branch URL) or a repository-relative local source path.
-2. Imports supported source files from public GitHub ZIP archives into a temporary local workspace with download, file-count, file-size, and extraction limits.
-3. Runs a small set of defensive static patterns and, when installed and explicitly enabled, local Semgrep rules.
-4. Returns bounded findings with severity, file, line, evidence excerpt, and a remediation recommendation.
-5. Provides deterministic remediation guidance for supported rule types. It does not apply patches or open fix pull requests yet.
+## How GitHub repository scanning works
 
-The GitHub archive is fetched only to retrieve source code. SecurityMatrix does **not** actively probe the repository owner's website, production server, or any URL found in the code.
+1. The user supplies a public GitHub repository URL and confirms authorization.
+2. SecurityMatrix retrieves repository metadata and downloads the source ZIP archive from GitHub.
+3. Supported source files are extracted into a temporary local workspace.
+4. The bounded static checks run against those files.
+5. The UI displays findings and human-reviewed remediation guidance.
 
-### Current limits
+The source download is **not** an active security test of the repository owner's website. SecurityMatrix does not probe production hosts, follow URLs found in source files, or execute the downloaded project.
 
-- Public GitHub repositories only; private repositories are not supported.
-- Archive download: up to 30 MB; repository metadata size limit: 20 MB.
-- Extracted supported source: up to 40 MB and 3,000 archive entries.
-- Up to 250 files are scanned; files larger than 256 KB are skipped; up to 100 findings are returned.
-- Current built-in rules cover possible hard-coded secrets, `eval`, `subprocess(..., shell=True)`, and debug settings. These are heuristics and can produce false positives or miss vulnerabilities.
-- Optional Semgrep runs only against the local source and the repository's local rules; it has a 30-second timeout.
-- Imported workspaces and scan reports are held in process memory/local temporary storage and are not a durable multi-user service.
+### Import and scan limits
 
-## Platform Demo
+| Limit | Current value |
+|---|---:|
+| Repository visibility | Public only |
+| Repository metadata size | 20 MB |
+| ZIP download | 30 MB |
+| Extracted supported source | 40 MB |
+| Archive entries | 3,000 |
+| Files scanned | 250 |
+| Maximum individual file | 256 KB |
+| Findings returned | 100 |
+| Optional Semgrep timeout | 30 seconds |
 
-Watch the SecurityMatrix platform walkthrough below. The video is hosted in this repository and uses a responsive HTML5 player; autoplay may be restricted by browser settings.
+Unsupported files and oversized files are skipped. The current rules are heuristics: false positives and missed vulnerabilities are possible.
 
-<div align="center">
-  <video
-    controls
-    autoplay
-    muted
-    loop
-    playsinline
-    preload="metadata"
-    width="100%"
-    style="max-width:700px;height:auto;border-radius:12px;"
-  >
-    <source src="https://raw.githubusercontent.com/zopair/security_matrix/main/assets/gemini_generated_video_05cffc5b.mp4" type="video/mp4">
-    Your browser does not support HTML5 video. <a href="https://raw.githubusercontent.com/zopair/security_matrix/main/assets/gemini_generated_video_05cffc5b.mp4">Open the demo video directly</a>.
-  </video>
-</div>
+## What is not implemented yet
 
-**Video file:** [assets/gemini_generated_video_05cffc5b.mp4](assets/gemini_generated_video_05cffc5b.mp4)
+- Private repository access or GitHub App authorization.
+- Dependency installation or full dependency vulnerability analysis for imported projects.
+- Build, unit, integration, or regression testing of imported repositories.
+- Dynamic testing against a user's staging environment.
+- Automatic code fixes, isolated fix branches, or generated remediation pull requests.
+- Durable multi-user scan history, workspace isolation between authenticated users, or a hosted production service.
 
-## Architecture & Components (MVP)
+Do not interpret a clean result as proof that a project is secure. Do not submit secrets or private source code to this public-repository-only MVP.
 
-```text
-Client / Test Traffic
-        |
-Reverse Proxy / TLS / Rate Limits
-        |
-Deception Gateway (FastAPI)
-        |
-Risk & Decision Engine
-   /                 \
-Normal response     Isolated Deception Sandbox
-                         |
-                 Synthetic data / decoy routes
-                         |
-              Structured event logging
-                         |
-               SOC dashboard / analytics
-```
+## Run locally
 
-### 1. Deception Gateway & Risk Engine
-
-The gateway validates incoming requests and applies explicit, configurable decision rules. Decisions should use multiple signals and context; user-agent strings and IP addresses alone are not reliable proof of an AI agent. Authentication and authorization for real resources must remain independent of the deception layer.
-
-### 2. Isolated Deception Sandbox
-
-The sandbox returns **synthetic, non-sensitive data** for selected decoy routes. It must not share production credentials, databases, filesystem mounts, or unrestricted network access. Apply strict limits to response sizes, request rates, CPU, memory, and session duration. Do not use infinite loops or unbounded payload generation.
-
-### 3. SOC Monitoring & Analytics
-
-Structured events should include a timestamp, request/session identifier, event type, risk decision, and outcome. Redact credentials, authorization headers, cookies, and other secrets before persistence. Restrict access to logs and define retention limits. Dashboard incident indicators represent observed or simulated events and should be labelled accordingly.
-
-## Key Features
-
-- Rule-based detection of suspicious enumeration and probing patterns.
-- Risk-based routing to normal handling, monitoring, throttling, or a decoy response.
-- Synthetic decoy data designed to avoid disclosure of real user information.
-- Structured telemetry for reviewing observed tactics, techniques, and procedures (TTPs).
-- Minimal Arabic/English scanner interface with an animated repository-link field and explicit authorization.
-- Automated tests and CI checks through GitHub Actions.
-
-**Scope clarification:** Detection is heuristic, not a guarantee of identifying AI-generated traffic. SecurityMatrix does not promise to trap every attacker, prevent all intrusions, or neutralize an agent outside the controlled environment.
-
-## Quick Start
-
-### Requirements
-
-- Python 3.11 or newer
-- Git
-
-### Local setup
+Requirements: Python 3.11+.
 
 ```bash
 git clone https://github.com/zopair/security_matrix.git
 cd security_matrix
-
 python -m venv .venv
-# Linux/macOS
 source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+SECURITYMATRIX_ALLOW_LOCAL_READS=true uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open the bilingual scanner at [http://127.0.0.1:8000/](http://127.0.0.1:8000/) and API documentation at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). For local source scans, enter a path relative to the repository root, such as `app/`.
+Open the interface at [http://127.0.0.1:8000/](http://127.0.0.1:8000/) and API docs at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
-### Run tests
+The local-read exception is restricted to loopback peer and Host values and must not be enabled behind a reverse proxy. For any remotely reachable deployment, configure `SECURITYMATRIX_READ_TOKEN` and send it as a Bearer token through a trusted server-side session or reverse proxy. Never place it in browser JavaScript or localStorage.
+
+To enable the optional local Semgrep step:
+
+```bash
+SECURITYMATRIX_ENABLE_SEMGREP=true
+```
+
+Run tests:
 
 ```bash
 pytest -q
 ```
 
-### GitHub Actions
+## DAST safety boundary
 
-The repository's workflow definitions under `.github/workflows/` can run tests on pushes and pull requests. Actions are CI automation: **they do not host a persistent API service by themselves**. For a public deployment, use a supported application host, configure TLS and secrets in the host's secret manager, and keep production credentials out of Git history and workflow logs.
+The Nuclei workflows run only against temporary applications started inside GitHub-hosted runners and bound to loopback. The open-source lab workflow uses a pinned OWASP Juice Shop container. It does not accept arbitrary public URLs and must not be repointed at production systems without explicit authorization and a separately reviewed scope.
 
-## Security Automation
+## Repository workflows
 
-GitHub Actions includes the following workflows:
+- `.github/workflows/ci.yml` — Python test matrix.
+- `.github/workflows/security-scan.yml` — static and dependency checks.
+- `.github/workflows/codeql.yml` — CodeQL analysis.
+- `.github/workflows/nuclei-dast.yml` — local SecurityMatrix DAST.
+- `.github/workflows/oss-dast.yml` — isolated OWASP Juice Shop DAST lab.
+- `.github/workflows/auto-remediation.yml` — dependency update proposals only; it does not apply arbitrary source-code fixes.
 
-- `.github/workflows/security-scan.yml`: local Semgrep rules (no hosted rule registry), pip-audit dependency checks, Bandit Python checks, SARIF upload, and a normalized report artifact.
-- `.github/workflows/codeql.yml`: GitHub CodeQL security-extended analysis for Python. Runs on pushes, pull requests, weekly schedule, and manual dispatch.
-- `.github/workflows/nuclei-dast.yml`: Nuclei scans only the temporary local SecurityMatrix app on the GitHub-hosted runner.\n- `.github/workflows/oss-dast.yml`: Nuclei scans a pinned OWASP Juice Shop Docker image bound to loopback inside the GitHub-hosted runner. This is a lab validation workflow, not a general-purpose URL scanner.
-- `.github/workflows/auto-remediation.yml`: reviews pip-audit output and proposes compatible direct-dependency constraint updates in a pull request. It never merges or deploys automatically.
-- `.github/dependabot.yml`: weekly dependency and GitHub Actions update proposals.
+## Development status
 
-### Optional SOC ingestion
-
-To stream normalized scanner findings into the SOC dashboard, configure these repository Actions secrets:
-
-- `SECURITYMATRIX_INGEST_URL`: base URL of the deployed SecurityMatrix instance.
-- `SECURITYMATRIX_INGEST_TOKEN`: a long random token that must match the `SECURITYMATRIX_INGEST_TOKEN` environment variable on the API service.
-
-The API accepts only bounded finding metadata at `POST /api/security/findings` and requires a Bearer token. The in-memory findings list is intended for MVP use; it is not durable storage. If the secrets are absent, reports remain available as workflow artifacts. Do not point Nuclei at a third-party host or production target without explicit authorization.
-
-## Configuration & Operational Safety
-
-- Keep the deception environment isolated from production networks and data stores.
-- Protect telemetry reads (`/api/metrics`, `/api/events`, and all `/api/security/*` routes) with a dedicated `SECURITYMATRIX_READ_TOKEN` Bearer token. Keep it separate from the scanner-only `SECURITYMATRIX_INGEST_TOKEN`.
-- For local development only, `SECURITYMATRIX_ALLOW_LOCAL_READS=true` permits unauthenticated reads only when both the TCP peer and Host header are loopback addresses. It is disabled by default; bind the development server to loopback and do not enable this exception behind a reverse proxy.
-- Never place `SECURITYMATRIX_READ_TOKEN` in the static dashboard, browser JavaScript, localStorage, or a public GitHub Pages configuration. Remote dashboards need a trusted authenticated reverse proxy/session that injects authorization server-side.
-- Use an external reverse proxy or WAF for TLS termination and edge rate limiting.
-- Set request, body-size, response-size, and session-duration limits.
-- Fail closed for access to real protected resources; a failed risk engine must never bypass authentication or authorization.
-- Store logs with least-privilege access, redaction, retention limits, and integrity controls.
-- Do not log secrets or send sensitive telemetry to public repositories or workflow artifacts.
-- Test false positives with legitimate clients before enabling automatic routing in production.
-- Use a kill switch and resource ceilings to disable deception safely if latency or load rises.
-
-## Development Status
-
-SecurityMatrix is an evolving MVP/reference implementation. Features described here are design goals unless they are present in the code and covered by tests. Check the current source and CI results before relying on any capability in a production environment.
-
-## Contributing
-
-Contributions are welcome through focused pull requests. Include tests for behavior changes, document security implications, and avoid committing credentials, real personal data, or production logs.
+SecurityMatrix is an MVP under active development. The current user journey is **submit public repository/local path → approve → bounded static scan → findings → remediation guidance**. Any capability beyond that is a planned enhancement until implemented and covered by tests.
 
 ## License
 
-This project is intended to be distributed under the MIT License. See [LICENSE](LICENSE) when the license file is present.
-
----
-
-**SecurityMatrix | AI Deception & Threat Neutralization Grid**
-
-## Consent-Based Security Assessment & Remediation
-
-The dashboard includes a consent checkbox and a bounded assessment flow at `POST /api/security/assess`.
-
-- Repository-relative paths are scanned locally with a bounded pattern-based static check (maximum 250 files, 256 KB per file, and 100 findings).
-- Optional local Semgrep is enabled only when `SECURITYMATRIX_ENABLE_SEMGREP=true`; the process has a 30-second timeout.
-- URL inputs are **passive-only**: they are validated and reported, but the server does not contact the URL or run Nuclei against it. Consent is not proof of ownership and does not make arbitrary active scanning safe.
-- The remediation helper provides specific review guidance and a caveat. The approval endpoint records explicit approval for human review; it does **not** modify source code or open a pull request in this version.
-- Scan sessions are kept in bounded process memory (up to 100) and disappear when the process restarts. The built-in pattern checks can miss vulnerabilities and produce false positives.
-- This is not yet an LLM-backed autonomous patch generator. Do not describe recommendations as verified patches. A future PR integration should use a narrowly scoped GitHub App/token, create a branch and draft PR only, run tests/security checks, and never auto-merge.
-
-Endpoints: `POST /api/security/assess`, `GET /api/security/assess/{scan_id}`, `POST /api/security/assess/{scan_id}/findings/{index}/analyze`, and `POST /api/security/assess/{scan_id}/findings/{index}/approve`.
-
-
-## Open-source security analysis and remediation
-
-SecurityMatrix does not call hosted LLMs or require external AI API keys. Remediation guidance is generated locally from explicit rule IDs in `app/ai_security.py`; it is advisory only and never edits source code or creates a PR by itself.
-
-### Open-source and GitHub-native components
-
-- **[Semgrep Community Edition](https://github.com/semgrep/semgrep)**: static application security analysis and SARIF output, using rules versioned in this repository (`.semgrep/security.yml`).
-- **[Bandit](https://github.com/PyCQA/bandit)**: Python-specific security linting.
-- **[pip-audit](https://github.com/pypa/pip-audit)**: known-vulnerability checks for Python dependencies.
-- **[Nuclei](https://github.com/projectdiscovery/nuclei)**: DAST checks against the isolated loopback test instance only.
-- **[Dependabot](https://github.com/dependabot/dependabot-core)**: native dependency update and security PRs.
-- **[GitHub CodeQL](https://github.com/github/codeql) + GitHub Actions**: native static analysis, CI, scheduled scans, artifacts, and review-only dependency-remediation PRs. The PR workflow uses GitHub's built-in `GITHUB_TOKEN`; no personal access token or third-party API key is required.
-
-The `auto-remediation.yml` workflow proposes conservative dependency constraint changes when a compatible fixed version is identified, runs tests, and opens a review-only pull request. It does not merge or deploy. Source-code findings receive deterministic remediation guidance; a developer must implement and review the change. This avoids unsafe generic source rewriting.
-
-Security scans are bounded and do not contact arbitrary URLs. Nuclei targets only `127.0.0.1` in the workflow. Public GitHub repository status is read through the anonymous GitHub REST API; the dashboard does not store credentials in the browser.
-
-## Simple bilingual scanner interface
-
-The interface at `app/static/index.html` is designed around one primary action: enter a repository URL or local code path, confirm authorization, and review the bounded assessment. It supports Arabic RTL and English LTR, with a subtle animated neon input. Public GitHub status (open PRs, CI, Security Scan, Nuclei DAST, and CodeQL) is available in a secondary expandable section. The page does not store a GitHub token in the browser.
-
-### Enable GitHub Pages
-
-1. Open **Settings → Pages** in this repository.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-3. Open **Actions → Deploy SecurityMatrix dashboard to GitHub Pages** and run the workflow, or push a later dashboard change to `main`.
-4. After a successful deployment, the site URL will be `https://zopair.github.io/security_matrix/`.
-
-The workflow publishes only `app/static/index.html` as a static site. GitHub Pages cannot run the Python scanner or telemetry API. Connect a separately hosted FastAPI service to run the bounded local code assessment. URL inputs are passive-only in this MVP; the interface does not perform active DAST against arbitrary URLs. The remediation guidance is local rule-based logic and does not use an external AI API.
-
-### Connect a FastAPI scanner backend
-
-Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; No external AI API keys are required; any optional ingestion bearer token remains server-side only.
-
-GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
-
-
-## Isolated DAST against open-source projects
-
-The `.github/workflows/oss-dast.yml` workflow provides a separate, consent-safe lab for open-source targets:
-
-- Starts the pinned OWASP Juice Shop image `bkimminich/juice-shop:v20.3.0` as a temporary Docker container.
-- Publishes the service only on runner loopback (`127.0.0.1:3000`); it does not scan the public demo or any upstream server.
-- Runs the pinned Nuclei container `projectdiscovery/nuclei:v3.11.1` with bounded rate/concurrency and the `misconfig,exposure` template tags.
-- Removes the target container after the scan and uploads JSONL findings plus a status manifest.
-
-A completed report with zero matching lines means only that the selected templates produced no findings at the configured severities. It is not proof that the target has no vulnerabilities, and it does not cover authenticated business-logic testing or the full OWASP Top 10. The workflow is isolated to the temporary local target and must not be repointed at public or production hosts without explicit authorization.
+MIT. See [LICENSE](LICENSE).
