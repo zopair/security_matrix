@@ -228,3 +228,15 @@ The workflow publishes only `app/static/index.html` as a static site. GitHub Pag
 Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; No external AI API keys are required; any optional ingestion bearer token remains server-side only.
 
 GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
+
+
+## Isolated DAST against open-source projects
+
+The `.github/workflows/oss-dast.yml` workflow provides a separate, consent-safe lab for open-source targets:
+
+- Starts the pinned OWASP Juice Shop image `bkimminich/juice-shop:v20.3.0` as a temporary Docker container.
+- Publishes the service only on runner loopback (`127.0.0.1:3000`); it does not scan the public demo or any upstream server.
+- Runs the pinned Nuclei container `projectdiscovery/nuclei:v3.11.1` with bounded rate/concurrency and the `misconfig,exposure` template tags.
+- Removes the target container after the scan and uploads JSONL findings plus a status manifest.
+
+A completed report with zero matching lines means only that the selected templates produced no findings at the configured severities. It is not proof that the target has no vulnerabilities, and it does not cover authenticated business-logic testing or the full OWASP Top 10. The workflow is isolated to the temporary local target and must not be repointed at public or production hosts without explicit authorization.
