@@ -77,10 +77,10 @@ function setLanguage(language){
  document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
  document.querySelectorAll("[data-i18n-html]").forEach(el=>{const key=el.dataset.i18nHtml;if(dict[key])el.innerHTML=dict[key]});
  document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{const key=el.dataset.i18nPlaceholder;if(dict[key])el.placeholder=dict[key]});
- $("language-toggle").textContent=language==="ar"?"EN":"عربي";
- $("language-toggle").setAttribute("aria-label",language==="ar"?"Switch to English":"التبديل إلى العربية");
+ document.getElementById("language-toggle").textContent=language==="ar"?"EN":"عربي";
+ document.getElementById("language-toggle").setAttribute("aria-label",language==="ar"?"Switch to English":"التبديل إلى العربية");
 }
-$("language-toggle").addEventListener("click",()=>setLanguage(currentLanguage==="ar"?"en":"ar"));
+document.getElementById("language-toggle").addEventListener("click",()=>setLanguage(currentLanguage==="ar"?"en":"ar"));
 setLanguage("ar");
 </script>
 <script>
