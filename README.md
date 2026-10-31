@@ -1,7 +1,7 @@
-# SecurityMatrix | AI Deception & Threat Neutralization Grid
+# SecurityMatrix | Consent-based source security checks
 
 <p align="center">
-  <strong>A defensive cyber-deception reference implementation for observing suspicious automation in a controlled, isolated environment.</strong>
+  <strong>A lightweight, bilingual security-assessment MVP for public GitHub repositories and local source code. It imports source into a bounded local workspace, runs limited static checks, and presents findings with human-reviewed remediation guidance.</strong>
 </p>
 
 <p align="center">
@@ -14,21 +14,27 @@
   <img alt="SOC Dashboard" src="https://img.shields.io/badge/UI-SOC%20Dashboard-111827">
 </p>
 
-> **Security note:** SecurityMatrix is a defensive monitoring and deception project. A dashboard, risk score, or simulated incident is not proof that a real attacker or AI agent has been identified or neutralized. Deploy behind an appropriately configured reverse proxy and never expose the sandbox to production systems.
+> **Security note:** SecurityMatrix is an early-stage source assessment tool, not a comprehensive vulnerability scanner. Its current repository scan imports public GitHub ZIP archives (or analyzes an existing local project path), then runs bounded pattern checks and optional local Semgrep rules. It does not execute project code, install dependencies, perform authenticated DAST, or automatically modify source files. A clean report is not proof that a project is secure.
 
-## Overview
+## What it does today
 
-SecurityMatrix explores how **cyber deception** can help defenders observe suspicious automated reconnaissance without exposing real assets. Requests that match configured risk signals can be routed to a deliberately limited **Deception Sandbox** containing synthetic records and simulated endpoints. Structured telemetry gives defenders a traceable view of the observed activity.
+1. Accepts a public GitHub repository URL (optionally a branch URL) or a repository-relative local source path.
+2. Imports supported source files from public GitHub ZIP archives into a temporary local workspace with download, file-count, file-size, and extraction limits.
+3. Runs a small set of defensive static patterns and, when installed and explicitly enabled, local Semgrep rules.
+4. Returns bounded findings with severity, file, line, evidence excerpt, and a remediation recommendation.
+5. Provides deterministic remediation guidance for supported rule types. It does not apply patches or open fix pull requests yet.
 
-The design prioritizes isolation, bounded resource use, auditable decisions, and safe failure modes over infinite loops or attempts to exhaust an external agent's resources.
+The GitHub archive is fetched only to retrieve source code. SecurityMatrix does **not** actively probe the repository owner's website, production server, or any URL found in the code.
 
-### Design goals
+### Current limits
 
-- Detect suspicious request patterns using transparent, explainable rules.
-- Keep synthetic data and decoy behavior separate from production data and services.
-- Capture useful, privacy-conscious event records for investigation.
-- Give developers a simple bilingual (Arabic/English) consent-first scan workflow with clear, human-readable findings.
-- Run repeatable checks through GitHub Actions.
+- Public GitHub repositories only; private repositories are not supported.
+- Archive download: up to 30 MB; repository metadata size limit: 20 MB.
+- Extracted supported source: up to 40 MB and 3,000 archive entries.
+- Up to 250 files are scanned; files larger than 256 KB are skipped; up to 100 findings are returned.
+- Current built-in rules cover possible hard-coded secrets, `eval`, `subprocess(..., shell=True)`, and debug settings. These are heuristics and can produce false positives or miss vulnerabilities.
+- Optional Semgrep runs only against the local source and the repository's local rules; it has a 30-second timeout.
+- Imported workspaces and scan reports are held in process memory/local temporary storage and are not a durable multi-user service.
 
 ## Platform Demo
 
@@ -52,7 +58,7 @@ Watch the SecurityMatrix platform walkthrough below. The video is hosted in this
 
 **Video file:** [assets/gemini_generated_video_05cffc5b.mp4](assets/gemini_generated_video_05cffc5b.mp4)
 
-## Architecture & Components
+## Architecture & Components (MVP)
 
 ```text
 Client / Test Traffic
@@ -118,7 +124,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Open the API documentation at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). The dashboard entry point and available routes are documented in the repository as they are implemented.
+Open the bilingual scanner at [http://127.0.0.1:8000/](http://127.0.0.1:8000/) and API documentation at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). For local source scans, enter a path relative to the repository root, such as `app/`.
 
 ### Run tests
 
@@ -136,7 +142,7 @@ GitHub Actions includes the following workflows:
 
 - `.github/workflows/security-scan.yml`: local Semgrep rules (no hosted rule registry), pip-audit dependency checks, Bandit Python checks, SARIF upload, and a normalized report artifact.
 - `.github/workflows/codeql.yml`: GitHub CodeQL security-extended analysis for Python. Runs on pushes, pull requests, weekly schedule, and manual dispatch.
-- `.github/workflows/nuclei-dast.yml`: Nuclei scans only the temporary app started on `127.0.0.1` inside the GitHub-hosted runner. It uses bounded request rate/concurrency and disables Interactsh callbacks.
+- `.github/workflows/nuclei-dast.yml`: Nuclei scans only the temporary local SecurityMatrix app on the GitHub-hosted runner.\n- `.github/workflows/oss-dast.yml`: Nuclei scans a pinned OWASP Juice Shop Docker image bound to loopback inside the GitHub-hosted runner. This is a lab validation workflow, not a general-purpose URL scanner.
 - `.github/workflows/auto-remediation.yml`: reviews pip-audit output and proposes compatible direct-dependency constraint updates in a pull request. It never merges or deploys automatically.
 - `.github/dependabot.yml`: weekly dependency and GitHub Actions update proposals.
 
