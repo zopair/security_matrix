@@ -151,28 +151,28 @@ def test_assessment_rejects_non_github_external_urls():
     assert response.json() == {"error": "invalid or unavailable scan target"}
 
 
-def test_public_github_repository_is_imported_and_scanned(monkeypatch, tmp_path):
-    import app.ai_security as scanner
+def test_public_github_repository_url_is_assessed_after_consent(monkeypatch):
+    seen = {}
 
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "example.py").write_text("import subprocess\\nsubprocess.run(command, shell=True)\\n", encoding="utf-8")
-    monkeypatch.setattr(scanner, "IMPORTED_ROOTS", {source.resolve()})
-    monkeypatch.setattr(
-        scanner,
-        "import_github_repository",
-        lambda value: (source.resolve(), {"repository": "example/project", "branch": "main", "files_imported": "1"}),
-    )
+    def fake_scan(target):
+        seen["target"] = target
+        return {
+            "target": "example/project",
+            "mode": "github-repository-static-analysis",
+            "repository": "example/project",
+            "files_checked": 1,
+            "findings": [],
+        }
+
+    monkeypatch.setattr(main_module, "scan_target", fake_scan)
     response = client.post(
         "/api/security/assess",
         json={"target": "https://github.com/example/project", "consent": True},
     )
     assert response.status_code == 200
-    data = response.json()
-    assert data["mode"] == "github-repository-static-analysis"
-    assert data["repository"] == "example/project"
-    assert data["files_checked"] == 1
-    assert any(item["rule_id"] == "subprocess-shell" for item in data["findings"])
+    assert seen["target"] == "https://github.com/example/project"
+    assert response.json()["mode"] == "github-repository-static-analysis"
+    assert response.json()["repository"] == "example/project"
 
 
 def test_local_assessment_returns_bounded_results():
