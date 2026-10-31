@@ -184,7 +184,11 @@ def test_local_assessment_returns_bounded_results():
     assert len(data["findings"]) <= 100
 
 
-def test_local_remediation_guidance_is_keyless():
+def test_local_remediation_guidance_is_keyless(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis",
+        "findings": [{"id": "fixture-1", "rule_id": "unsafe-eval", "severity": "medium", "title": "Unsafe eval", "target": "fixture.py"}],
+    })
     scan = client.post(
         "/api/security/assess",
         json={"target": "app/ai_security.py", "consent": True},
@@ -200,7 +204,11 @@ def test_local_remediation_guidance_is_keyless():
     assert data["workflow_url"].endswith("/actions/workflows/auto-remediation.yml")
 
 
-def test_remediation_guidance_does_not_edit_source_or_call_external_services():
+def test_remediation_guidance_does_not_edit_source_or_call_external_services(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis",
+        "findings": [{"id": "fixture-1", "rule_id": "unsafe-eval", "severity": "medium", "title": "Unsafe eval", "target": "fixture.py"}],
+    })
     scan = client.post(
         "/api/security/assess",
         json={"target": "app/ai_security.py", "consent": True},
@@ -214,7 +222,10 @@ def test_remediation_guidance_does_not_edit_source_or_call_external_services():
     assert response.json()["mode"] == "deterministic-open-source"
 
 
-def test_invalid_finding_index_returns_404():
+def test_invalid_finding_index_returns_404(monkeypatch):
+    monkeypatch.setattr(main_module, "scan_target", lambda target: {
+        "target": "fixture", "mode": "local-static-analysis", "findings": [],
+    })
     scan = client.post(
         "/api/security/assess",
         json={"target": "app/ai_security.py", "consent": True},
