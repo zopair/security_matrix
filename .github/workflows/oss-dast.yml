@@ -1,0 +1,104 @@
+name: Open-source DAST Lab
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/oss-dast.yml"
+      - "scripts/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 1 * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oss-dast-lab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  juice-shop-local:
+    name: DAST against isolated OWASP Juice Shop
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout SecurityMatrix
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Start pinned OWASP Juice Shop container
+        run: |
+          docker run -d --name juice-shop \
+            -p 127.0.0.1:3000:3000 \
+            bkimminich/juice-shop:v20.3.0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              echo "Local Juice Shop is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs juice-shop
+          exit 1
+
+      - name: Run bounded Nuclei DAST in a container
+        id: nuclei
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -v "$PWD:/work" -w /work \
+            projectdiscovery/nuclei:v3.11.1 \
+            -update-templates \
+            -u http://127.0.0.1:3000 \
+            -tags misconfig,exposure \
+            -severity medium,high,critical \
+            -rate-limit 2 -c 2 -timeout 8 -retries 0 \
+            -no-interactsh -jsonl -o oss-nuclei-results.jsonl
+
+      - name: Record scan outcome
+        if: always()
+        env:
+          NUCLEI_OUTCOME: ${{ steps.nuclei.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = Path("oss-nuclei-results.jsonl")
+          outcome = os.environ.get("NUCLEI_OUTCOME", "unknown")
+          if not result.exists():
+              result.touch()
+          report = {
+              "target": "http://127.0.0.1:3000",
+              "target_project": "OWASP Juice Shop",
+              "target_image": "bkimminich/juice-shop:v20.3.0",
+              "scanner_image": "projectdiscovery/nuclei:v3.11.1",
+              "template_tags": ["misconfig", "exposure"],
+              "status": "completed" if outcome == "success" else outcome,
+              "result_bytes": result.stat().st_size,
+              "result_lines": sum(1 for line in result.open(encoding="utf-8") if line.strip()),
+          }
+          Path("oss-dast-status.json").write_text(json.dumps(report, indent=2) + chr(10), encoding="utf-8")
+          print(json.dumps(report))
+          if outcome != "success":
+              raise SystemExit("Nuclei did not complete successfully; report is not a clean scan.")
+          PY
+
+      - name: Stop and remove local target
+        if: always()
+        run: docker rm -f juice-shop || true
+
+      - name: Upload isolated DAST report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oss-dast-juice-shop-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            oss-nuclei-results.jsonl
+            oss-dast-status.json
