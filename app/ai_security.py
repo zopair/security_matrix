@@ -226,7 +226,7 @@ def scan_target(target: str) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired, ValueError):
             findings.append({
                 "id": "semgrep-unavailable", "severity": "info", "title": "Optional Semgrep scan unavailable",
-                "rule_id": "SCANNER-OPTIONAL", "target": validated.get("repository", root.relative_to(REPO_ROOT).as_posix()),
+                "rule_id": "SCANNER-OPTIONAL", "target": (validated["repository"] if validated["kind"] == "github" else root.relative_to(REPO_ROOT).as_posix()),
                 "details": "The built-in bounded pattern scan completed; Semgrep was not available or timed out.",
                 "recommendation": "Install Semgrep and set SECURITYMATRIX_ENABLE_SEMGREP=true to enable the optional local scan.",
                 "patch": None,
