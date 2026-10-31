@@ -4,6 +4,7 @@ Synthetic data only. Heuristics are not proof that a request came from an AI age
 """
 from __future__ import annotations
 
+import asyncio
 import hmac
 import hashlib
 import json
@@ -357,7 +358,7 @@ async def start_security_assessment(request: Request) -> JSONResponse:
     if not isinstance(target, str):
         return JSONResponse(status_code=400, content={"error": "target must be a string"})
     try:
-        result = scan_target(target)
+        result = await asyncio.to_thread(scan_target, target)
     except ValueError:
         return JSONResponse(status_code=400, content={"error": "invalid or unavailable scan target"})
     except Exception:
