@@ -55,16 +55,14 @@ button,input{font:inherit}.shell{width:min(920px,100% - 36px);margin:auto;paddin
 <div class="repo-metric"><span class="metric-label">Open PRs</span><strong id="repo-pr-count">—</strong></div>
 <div class="repo-metric"><span class="metric-label">CI</span><strong id="repo-ci-state">—</strong><span class="meta" id="repo-ci-time"></span></div>
 <div class="repo-metric"><span class="metric-label">Security Scan</span><strong id="repo-security-state">—</strong><span class="meta" id="repo-security-time"></span></div>
-<div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time"></span></div>
+<div class="repo-metric"><span class="metric-label">Nuclei DAST</span><strong id="repo-nuclei-state">—</strong><span class="meta" id="repo-nuclei-time"></span></div><div class="repo-metric"><span class="metric-label">CodeQL</span><strong id="repo-codeql-state">—</strong><span class="meta" id="repo-codeql-time"></span></div>
 </div>
 <div class="repo-columns"><div><strong data-i18n="openPRs">طلبات الدمج المفتوحة</strong><div class="events" id="github-prs"><div class="empty">Loading…</div></div></div><div><strong data-i18n="workflowRuns">آخر تشغيلات الفحوصات</strong><div class="events" id="github-workflows"><div class="empty">Loading…</div></div></div></div>
-<p class="meta" id="github-updated"></p><span id="repo-codeql-state" class="compat"></span><span id="repo-codeql-time" class="compat"></span>
+<p class="meta" id="github-updated"></p>
 </div>
 </details>
 <footer data-i18n="footer">SecurityMatrix · فحص مسؤول، ونتائج واضحة، وقرار الإصلاح بيدك.</footer>
-<div class="compat" aria-hidden="true">
-<span id="events-count"></span><span id="decoy-count"></span><span id="risk-count"></span><span id="finding-count"></span><span id="uptime"></span><div id="chart"></div><div id="events-list"></div><div id="findings-list"></div>
-</div>
+
 </main>
 <script>
 const translations = {
@@ -176,44 +174,6 @@ setLanguage("ar");
     }
     $("github-refresh").addEventListener("click", refreshGithubStatus);
 
-    async function refresh() {
-      let base;
-      try { base = apiBase(); } catch (error) {
-        $("system-state").textContent = "BACKEND URL INVALID";
-        $("events-list").innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
-        return;
-      }
-      if (!base) {
-        $("system-state").textContent = "GITHUB LIVE · SCANNER OFFLINE";
-        $("events-list").innerHTML = '<div class="empty">Connect a FastAPI backend URL above to enable local telemetry.</div>';
-        $("findings-list").innerHTML = '<div class="empty">Scanner reports are available when a FastAPI backend is connected.</div>';
-        return;
-      }
-      try {
-        const [metricsRes, eventsRes, findingsRes] = await Promise.all([fetch(base + "/api/metrics"), fetch(base + "/api/events?limit=12"), fetch(base + "/api/security/findings?limit=100")]);
-        if (!metricsRes.ok || !eventsRes.ok || !findingsRes.ok) throw new Error("API unavailable");
-        const metrics = await metricsRes.json(), data = await eventsRes.json(), findingsData = await findingsRes.json(), events = data.events || [];
-        $("system-state").textContent = "LOCAL API CONNECTED";
-        $("events-count").textContent = metrics.event_count ?? 0;
-        $("decoy-count").textContent = metrics.decisions?.decoy ?? 0;
-        $("risk-count").textContent = events.filter(e => (e.risk_score || 0) >= 35).length;
-        $("finding-count").textContent = findingsData.count ?? 0;
-        const findingsList = $("findings-list");
-        findingsList.innerHTML = findingsData.findings?.length ? findingsData.findings.slice(0,8).map(f => '<div class="event"><span class="event-dot" style="background:' + (f.severity === 'critical' || f.severity === 'high' ? 'var(--red)' : 'var(--amber)') + '"></span><div><strong>' + esc(f.source) + ' · ' + esc(f.title) + '</strong><small>' + esc(f.severity) + ' · ' + esc(f.rule_id) + ' · ' + esc(f.target) + '</small></div><span class="pill">' + esc(f.outcome) + '</span></div>').join("") : '<div class="empty">No scanner findings received. Configure the optional SOC ingest secrets in GitHub Actions to stream results here.</div>';
-        $("uptime").textContent = Math.floor((metrics.uptime_seconds || 0) / 60) + "m";
-        const chart = $("chart"); chart.innerHTML = "";
-        const heights = events.slice().reverse().map(e => Math.max(8, Math.min(100, e.risk_score || 12)));
-        for (const h of (heights.length ? heights : [8,8,8,8,8,8,8,8,8,8,8,8])) {
-          const bar = document.createElement("div"); bar.className = "bar"; bar.style.height = h + "%"; chart.appendChild(bar);
-        }
-        const list = $("events-list");
-        list.innerHTML = events.length ? events.slice(0,6).map(e => '<div class="event"><span class="event-dot"></span><div><strong>' + esc(e.decision) + ' · ' + esc(e.path) + '</strong><small>' + esc(e.timestamp) + ' · risk ' + esc(e.risk_score) + '</small></div><span class="pill">' + esc(e.outcome) + '</span></div>').join("") : '<div class="empty">No request events yet. Try the health or decoy API endpoints.</div>';
-      } catch (_) {
-        $("system-state").textContent = "API DISCONNECTED";
-        $("events-list").innerHTML = '<div class="empty">Dashboard is static until the local API is running.</div>';
-      }
-    }
-
     const assessmentForm = document.getElementById("assessment-form");
     assessmentForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -259,7 +219,6 @@ setLanguage("ar");
       } catch (error) { output.textContent = error.message || "Request failed"; }
     }
 
-    refresh(); setInterval(refresh, 5000);
     refreshGithubStatus(); setInterval(refreshGithubStatus, 300000);
   </script>
 </body></html>
