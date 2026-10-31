@@ -146,7 +146,7 @@ def test_assessment_rejects_path_traversal():
 
 
 def test_assessment_rejects_non_github_external_urls():
-    response = client.post("/api/security/assess", json={"target": "https://example.com", "consent": True})
+    response = client.post("/api/security/assess", json={"target": "app/ai_security.py", "consent": True})
     assert response.status_code == 400
     assert response.json() == {"error": "invalid or unavailable scan target"}
 
@@ -203,7 +203,7 @@ def test_local_remediation_guidance_is_keyless():
 def test_remediation_guidance_does_not_edit_source_or_call_external_services():
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/0/analyze",
@@ -217,7 +217,7 @@ def test_remediation_guidance_does_not_edit_source_or_call_external_services():
 def test_invalid_finding_index_returns_404():
     scan = client.post(
         "/api/security/assess",
-        json={"target": "https://example.com", "consent": True},
+        json={"target": "app/ai_security.py", "consent": True},
     ).json()
     response = client.post(
         f"/api/security/assess/{scan['scan_id']}/findings/99/analyze",
