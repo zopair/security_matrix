@@ -175,6 +175,60 @@ def test_public_github_repository_url_is_assessed_after_consent(monkeypatch):
     assert response.json()["repository"] == "example/project"
 
 
+def test_github_archive_import_is_bounded_and_extracts_source(monkeypatch):
+    import json
+    import zipfile
+    from io import BytesIO
+    import app.ai_security as scanner
+
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w") as archive:
+        archive.writestr("project-main/src/app.py", "print('safe source')\\n")
+        archive.writestr("project-main/../../escape.py", "should not escape")
+    archive_bytes = archive_buffer.getvalue()
+
+    class FakeResponse:
+        def __init__(self, payload, url):
+            self.payload = payload
+            self.url = url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, limit=-1):
+            return self.payload[:limit] if limit >= 0 else self.payload
+
+        def geturl(self):
+            return self.url
+
+    class FakeOpener:
+        def __init__(self):
+            self.calls = 0
+
+        def open(self, request, timeout):
+            self.calls += 1
+            if self.calls == 1:
+                return FakeResponse(
+                    json.dumps({"private": False, "archived": False, "size": 10, "default_branch": "main"}).encode(),
+                    "https://api.github.com/repos/example/project",
+                )
+            return FakeResponse(
+                archive_bytes,
+                "https://codeload.github.com/example/project/zip/refs/heads/main",
+            )
+
+    opener = FakeOpener()
+    monkeypatch.setattr(scanner.urllib.request, "build_opener", lambda *args: opener)
+    imported, metadata = scanner.import_github_repository("https://github.com/example/project")
+    assert metadata["repository"] == "example/project"
+    assert metadata["files_imported"] == "1"
+    assert (imported / "src" / "app.py").read_text(encoding="utf-8") == "print('safe source')\\n"
+    assert not (imported.parent / "escape.py").exists()
+
+
 def test_local_assessment_returns_bounded_results():
     response = client.post("/api/security/assess", json={"target": "app/ai_security.py", "consent": True})
     assert response.status_code == 200
