@@ -1,7 +1,6 @@
-"""Consent-gated, bounded security assessment and remediation proposal helpers.
+"""Consent-gated bounded static checks for local code and public GitHub archives.
 
-Only scans paths inside the configured local checkout. URL targets are validated
-but never contacted by this MVP, preventing SSRF and unauthorized active scans.
+Imported source is stored in temporary local workspaces and never executed.
 """
 from __future__ import annotations
 
@@ -38,6 +37,14 @@ def _inside_repo(path: Path) -> bool:
     return any(path == root or root in path.parents for root in roots)
 
 
+class _GitHubRedirectGuard(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, newurl):
+        parsed = urlparse(newurl)
+        if parsed.scheme != "https" or parsed.hostname not in {"api.github.com", "codeload.github.com"}:
+            raise ValueError("Unexpected repository archive redirect.")
+        return super().redirect_request(request, response, code, message, headers, newurl)
+
+
 def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
     """Import a public GitHub source archive with strict download and extraction bounds."""
     parsed = urlparse(value)
@@ -55,7 +62,7 @@ def import_github_repository(value: str) -> tuple[Path, dict[str, str]]:
     cached = IMPORTED_REPOSITORIES.get(cache_key)
     if cached and cached.exists():
         return cached, {"repository": key, "branch": branch_hint or "default", "source": "cached public archive"}
-    opener = urllib.request.build_opener()
+    opener = urllib.request.build_opener(_GitHubRedirectGuard())
     headers = {"User-Agent": "SecurityMatrix-Local-Scanner/1.0", "Accept": "application/vnd.github+json"}
     try:
         req = urllib.request.Request("https://api.github.com/repos/" + key, headers=headers)
