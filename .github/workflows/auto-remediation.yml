@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: auto-remediation-main
@@ -17,6 +16,9 @@ jobs:
   propose-dependency-fixes:
     name: Audit and propose direct dependency fixes
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     timeout-minutes: 15
     steps:
       - name: Checkout
