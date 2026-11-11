@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "17 5 * * 2"
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/auto-remediation.yml'
+      - 'scripts/prepare_remediation.py'
+      - 'requirements.txt'
 
 permissions:
   contents: read
@@ -13,6 +19,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workflow YAML
+        run: ruby -e "require 'yaml'; YAML.load_file('.github/workflows/auto-remediation.yml')"
+
   propose-dependency-fixes:
     name: Audit and propose direct dependency fixes
     runs-on: ubuntu-latest
