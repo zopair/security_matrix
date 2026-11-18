@@ -1,0 +1,36 @@
+{
+  "name": "SecurityMatrix",
+  "tag": "Defensive Cyber-Deception & Security Observability",
+  "url": "https://github.com/zopair/security_matrix",
+  "accent": [
+    133,
+    156,
+    255
+  ],
+  "scenes": [
+    {
+      "title": "The visibility challenge",
+      "narration": "Reconnaissance and automated probing can create noisy signals. Defenders need ways to observe suspicious patterns without placing real systems or sensitive records at risk."
+    },
+    {
+      "title": "A controlled deception layer",
+      "narration": "SecurityMatrix is a defensive cyber-deception reference implementation. It applies transparent risk rules and can route selected requests toward a deliberately limited sandbox containing synthetic data."
+    },
+    {
+      "title": "From signal to investigation",
+      "narration": "A FastAPI gateway evaluates configured request patterns. The decision layer selects normal handling, monitoring, throttling, or a decoy response. Structured events feed a dark SOC-style dashboard for review."
+    },
+    {
+      "title": "Built for bounded operations",
+      "narration": "The project emphasizes synthetic data, separation from production systems, redacted telemetry, rate and resource limits, and safe failure modes. Security scans target an isolated local test service rather than arbitrary external hosts."
+    },
+    {
+      "title": "Business value",
+      "narration": "Security teams can explore deception workflows, improve visibility into suspicious request behavior, and demonstrate how telemetry and controlled decoys may support investigation—without claiming that a heuristic score identifies an attacker."
+    },
+    {
+      "title": "MVP. Not a production security guarantee.",
+      "narration": "SecurityMatrix is an evolving MVP. Detection is heuristic, in-memory findings are not durable, and the sandbox is not a hardened production boundary. Review the implementation, deployment cautions, and roadmap on GitHub."
+    }
+  ]
+}
