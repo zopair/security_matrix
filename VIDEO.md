@@ -11,4 +11,4 @@ A narrated English overview for enterprise evaluation.
 
 The video distinguishes implemented capabilities from proof-of-concept scope and roadmap items.
 
-Narration is generated locally with eSpeak TTS. The video uses H.264/AAC encoding at 1280×720; no paid video or voice API is required.
+Narration is generated locally with Kokoro-82M using the American English `af_heart` voice. Kokoro model weights are Apache-2.0 and the `kokoro-onnx` inference package is MIT; phonemizer runtime components retain their own licenses and are used only in the temporary build environment, not redistributed with the video. The video uses H.264/AAC encoding at 1280×720; no paid video or voice API is required.
