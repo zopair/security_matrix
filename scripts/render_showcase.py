@@ -6,6 +6,8 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+import soundfile as sf
+from kokoro_onnx import Kokoro
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +21,9 @@ WIDTH, HEIGHT = 1280, 720
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 ACCENT = tuple(CONFIG.get("accent", [90, 160, 240]))
+MODEL_PATH = ROOT / ".cache/kokoro/kokoro-v1.0.onnx"
+VOICES_PATH = ROOT / ".cache/kokoro/voices-v1.0.bin"
+tts = Kokoro(str(MODEL_PATH), str(VOICES_PATH))
 
 
 def run(command):
@@ -143,22 +148,13 @@ for index, scene in enumerate(scenes, 1):
         len(scenes),
         image_path,
     )
-    run(
-        [
-            "espeak",
-            "-v",
-            "en-us+f3",
-            "-s",
-            "142",
-            "-p",
-            "43",
-            "-a",
-            "175",
-            "-w",
-            str(audio_path),
-            scene["narration"],
-        ]
+    audio, sample_rate = tts.create(
+        scene["narration"],
+        voice="af_heart",
+        speed=0.96,
+        lang="en-us",
     )
+    sf.write(str(audio_path), audio, sample_rate, subtype="PCM_16")
 
     duration = float(
         subprocess.check_output(
@@ -206,6 +202,8 @@ for index, scene in enumerate(scenes, 1):
         ]
     )
     clips.append(clip_path)
+
+tts.voices.close()
 
 end_image = WORK / "end-card.png"
 end_clip = WORK / "end-card.mp4"
