@@ -1,5 +1,7 @@
 # SecurityMatrix | AI Deception & Threat Neutralization Grid
 
+> **Preview:** [Local setup, demo scenario, acceptance checks, and known limits](PREVIEW.md).
+
 <p align="center">
   <strong>A defensive cyber-deception reference implementation for observing suspicious automation in a controlled, isolated environment.</strong>
 </p>
@@ -225,3 +227,9 @@ The workflow publishes only `app/static/index.html` as a static site. GitHub Pag
 Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; No external AI API keys are required; any optional ingestion bearer token remains server-side only.
 
 GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
+
+## Enterprise Project Overview
+
+<video controls playsinline preload="metadata" width="100%"><source src="https://raw.githubusercontent.com/zopair/security_matrix/feat/enterprise-showcase-video/assets/marketing/project-overview.mp4" type="video/mp4">Your browser does not support embedded video. [Open the MP4](https://raw.githubusercontent.com/zopair/security_matrix/feat/enterprise-showcase-video/assets/marketing/project-overview.mp4).</video>
+
+[Watch the English project overview](VIDEO.md) · [Open the project repository](https://github.com/zopair/security_matrix)
