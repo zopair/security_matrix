@@ -10,3 +10,5 @@ A narrated English overview for enterprise evaluation.
 **Project repository:** https://github.com/zopair/security_matrix
 
 The video distinguishes implemented capabilities from proof-of-concept scope and roadmap items.
+
+Narration is generated locally with eSpeak TTS. The video uses H.264/AAC encoding at 1280×720; no paid video or voice API is required.
