@@ -15,7 +15,7 @@ concurrency:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,10 +24,13 @@ jobs:
       - name: Install local rendering tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg espeak fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends ffmpeg espeak espeak-ng fonts-dejavu-core
           python -m pip install --upgrade pip
-          python -m pip install Pillow
-      - name: Render narrated MP4
+          python -m pip install Pillow==11.3.0 kokoro-onnx==0.5.0 soundfile==0.13.1
+          mkdir -p .cache/kokoro
+          curl --fail --location --retry 3 --output .cache/kokoro/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx
+          curl --fail --location --retry 3 --output .cache/kokoro/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin
+      - name: Render narrated MP4 with Kokoro
         run: python scripts/render_showcase.py
       - name: Commit generated video
         run: |
