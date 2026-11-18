@@ -1,5 +1,7 @@
 # SecurityMatrix | AI Deception & Threat Neutralization Grid
 
+> **Preview:** [Local setup, demo scenario, acceptance checks, and known limits](PREVIEW.md).
+
 <p align="center">
   <strong>A defensive cyber-deception reference implementation for observing suspicious automation in a controlled, isolated environment.</strong>
 </p>
