@@ -225,3 +225,47 @@ The workflow publishes only `app/static/index.html` as a static site. GitHub Pag
 Deploy the FastAPI application separately over HTTPS, then enter its base URL in the dashboard's **FastAPI backend URL** field. Configure the backend environment variable `SECURITYMATRIX_CORS_ORIGINS=https://zopair.github.io` (include any other exact frontend origins you use, comma-separated). Local development origins are allowed by default. The backend's `/api/config` endpoint exposes only non-secret runtime metadata; No external AI API keys are required; any optional ingestion bearer token remains server-side only.
 
 GitHub's anonymous REST API rate limit applies to public status requests. The dashboard polls GitHub every five minutes and provides a manual refresh button; avoid rapid repeated refreshes.
+
+
+## Proof of Concept & Enterprise Customization Readiness
+
+**Status: Defensive security MVP in development.** The repository contains a FastAPI service, static SOC dashboard, bounded risk-evidence correlation, opt-in synthetic deception endpoints, consent-gated local source scanning, and GitHub Actions security workflows. It is not a production SOC platform or a general-purpose autonomous remediation agent.
+
+| Capability | Current state / boundary |
+|---|---|
+| FastAPI dashboard and health endpoints | Implemented |
+| Request risk classification | Explainable heuristics; does not identify an AI agent with certainty |
+| Synthetic deception | Opt-in, disabled by default, bounded responses and rate limits |
+| Risk evidence correlation | Bounded in-memory event/incident buffers; not durable incident storage |
+| Local code assessment | Pattern-based scanning of repository-relative paths, bounded file count/size |
+| URL assessment | Passive-only; URL is validated but never contacted by the application |
+| Remediation guidance | Deterministic rule-based advice; no source edits or autonomous PR creation from the API |
+| GitHub Actions security checks | Semgrep, Bandit, pip-audit, CodeQL, OSV and loopback-only Nuclei workflows present |
+| Dependency remediation | Opens review-only PRs; no auto-merge or deploy |
+| Scanner ingestion | Optional bearer-token endpoint; in-memory MVP storage |
+| Public dashboard | Static HTML; GitHub Pages deployment workflow present |
+| License | MIT license file present |
+
+### Current verification snapshot
+
+- Auto Remediation Proposal: latest observed run on 24 November 2026 — Success.
+- CodeQL: latest observed run on 23 November 2026 — Success.
+- Security Scan: latest observed run on 23 November 2026 — Success.
+- OSV dependency scan: latest observed run on 22 November 2026 — Success.
+- Nuclei DAST: latest observed run on 23 November 2026 — Cancelled; do not describe the complete security workflow set as fully green.
+
+### Production readiness gates
+
+1. Add durable, access-controlled incident storage and defined retention before using this as an operational SOC.
+2. Deploy behind a trusted reverse proxy and configure exact CORS origins, TLS, request limits, and secret management.
+3. Keep deception endpoints disabled unless the service is isolated and all synthetic-only/resource limits are validated.
+4. Review false-positive/false-negative rates and ensure risk scores never replace authentication or authorization.
+5. Add authenticated analyst roles, audit access to findings, and protect scanner-ingestion credentials.
+6. Keep Nuclei restricted to the loopback test service unless a separately authorized target scope is approved.
+7. Treat every remediation PR as a proposal requiring code review and tests; do not auto-merge.
+
+## Intellectual Property & Authorship
+
+Project authorship and attribution: **Aly Hussein Zopair (علي حسين زبير ALY HUSSEIN ZOPAIR)**.
+
+The repository's MIT license applies to the project code subject to its terms. It does not override third-party licenses or grant rights to external targets, scan data, or customer information.
